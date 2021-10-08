@@ -324,7 +324,7 @@ const Popup: React.FC<PartComponentProps<PopupModel>> = (props) => {
   if (showPopup) {
     console.log('SHOW POPUP: ', { model, popupModalStyles });
   }
-
+  const popupModalZ = config?.z || 1000;
   return ready ? (
     <React.Fragment>
       {popupVisible ? (
@@ -359,6 +359,11 @@ const Popup: React.FC<PartComponentProps<PopupModel>> = (props) => {
       ) : null}
       {showPopup ? (
         <React.Fragment>
+          <style>
+            {`
+          #${id} { z-index: ${Math.max(z + popupModalZ || 0, popupModalZ)} !important; }
+        `}
+          </style>
           {partComponents ? (
             <div
               className={`info-icon-popup ${config?.customCssClass ? config.customCssClass : ''}`}
