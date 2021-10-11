@@ -10,6 +10,7 @@ import { parseBool, parseBoolean } from '../../../utils/common';
 import { PartComponentProps } from '../types/parts';
 import { getJanusCAPIRequestTypeString, JanusCAPIRequestTypes } from './JanusCAPIRequestTypes';
 import { CapiIframeModel } from './schema';
+import { writeCapiLog, capiMessageHandler } from './CapiHandler';
 
 const fakeUserStorage: any = {};
 const getFromUserStorage = async (simId: string | number, key: string | number) =>
@@ -22,16 +23,6 @@ const setToUserStorage = async (simId: string | number, key: string | number, va
 };
 const externalActivityMap: Map<string, any> = new Map();
 let context = 'VIEWER';
-const getExternalActivityMap = () => {
-  const result: any = {};
-
-  externalActivityMap.forEach((value, key) => {
-    // TODO: cut out functions?
-    result[key] = value;
-  });
-
-  return result;
-};
 
 const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) => {
   const [state, setState] = useState<any[]>(Array.isArray(props.state) ? props.state : []);
@@ -128,7 +119,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
     });
 
     // result of init has a state snapshot with latest (init state applied)
-    writeCapiLog('INIT RESULT CAPI', initResult);
+    writeCapiLog(id, 'INIT RESULT CAPI', initResult);
     const currentStateSnapshot = initResult.snapshot;
     if (initResult.context.currentActivity) {
       simLife.ownerActivityId = initResult.context.currentActivity;
@@ -297,32 +288,6 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
   const sendToIframe = (data: any) => {
     simFrame?.contentWindow?.postMessage(JSON.stringify(data), '*');
   };
-
-  const writeCapiLog = (msg: any, ...rest: any[]) => {
-    // TODO: change to a config value?
-    const boolWriteLog = false;
-    let colorStyle = 'background: #222; color: #bada55';
-    const [logStyle] = rest;
-    const args = rest;
-    if (logStyle && logStyle === 1) {
-      colorStyle = 'background: #222; color: yellow;';
-      args.shift();
-    }
-    if (logStyle && logStyle === 2) {
-      colorStyle = 'background: darkred; color: white;';
-      args.shift();
-    }
-    if (logStyle && logStyle === 3) {
-      colorStyle = 'background: blue; color: white;';
-      args.shift();
-    }
-    //help debug during development. set boolWriteLog = false once you are ready to check-in the code
-    if (boolWriteLog) {
-      // eslint-disable-next-line
-      console.log(`%c Capi(${id}) - ${msg}`, colorStyle, ...args);
-    }
-  };
-
   /*
    * Notify clients that configuration is updated. (eg. the question has changed)
    */
@@ -346,7 +311,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
         switch (notificationType) {
           case NotificationType.CHECK_STARTED:
             {
-              writeCapiLog('CHECK REQUEST STARTED STATE!!!!', 3, {
+              writeCapiLog(id, 'CHECK REQUEST STARTED STATE!!!!', 3, {
                 payload,
                 simLife,
               });
@@ -375,7 +340,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
             break;
           case NotificationType.STATE_CHANGED:
             {
-              writeCapiLog('MUTATE STATE!!!!', 3, {
+              writeCapiLog(id, 'MUTATE STATE!!!!', 3, {
                 simLife,
                 payload,
               });
@@ -394,7 +359,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
           case NotificationType.CONTEXT_CHANGED:
             {
               context = payload.mode;
-              writeCapiLog('CONTEXT CHANGED!!!!', 3, {
+              writeCapiLog(id, 'CONTEXT CHANGED!!!!', 3, {
                 simLife,
                 payload,
               });
@@ -478,7 +443,12 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       type,
       values,
     };
-    writeCapiLog(`Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `, 1, responseMsg);
+    writeCapiLog(
+      id,
+      `Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `,
+      1,
+      responseMsg,
+    );
     sendToIframe(responseMsg);
   };
 
@@ -582,7 +552,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
     }, {} as any);
 
     const updatedInternalState = updateInternalState(stateVarsFromSim);
-    writeCapiLog('VALUE CHANGE INTERNAL STATE', { updatedInternalState, stateVarsFromSim });
+    writeCapiLog(id, 'VALUE CHANGE INTERNAL STATE', { updatedInternalState, stateVarsFromSim });
 
     // value change is really the only time we should be saving
     debounceSave({
@@ -734,7 +704,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       }
       // TODO: check that we haven't got wires crossed? i.e. requestToken is the same
       // every time after handshake (if more than one on the same page);
-      writeCapiLog(`Received (${getJanusCAPIRequestTypeString(data.type)} : ${data.type}): `, {
+      writeCapiLog(id, `Received (${getJanusCAPIRequestTypeString(data.type)} : ${data.type}): `, {
         data,
       });
       switch (data.type) {
@@ -790,7 +760,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       return;
     }
 
-    writeCapiLog('INIT STATE APPLIED', 3);
+    writeCapiLog(id, 'INIT STATE APPLIED', 3);
     Object.keys(initState)
       .reverse()
       .forEach((key: any) => {

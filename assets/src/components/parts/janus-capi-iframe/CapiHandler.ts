@@ -1,7 +1,38 @@
 import { JanusCAPIRequestTypes } from './JanusCAPIRequestTypes';
 
+export const writeCapiLog = (id: string, msg: any, ...rest: any[]) => {
+  const boolWriteLog = false;
+  let colorStyle = 'background: #222; color: #bada55';
+  const [logStyle] = rest;
+  const args = rest;
+  if (logStyle && logStyle === 1) {
+    colorStyle = 'background: #222; color: yellow;';
+    args.shift();
+  }
+  if (logStyle && logStyle === 2) {
+    colorStyle = 'background: darkred; color: white;';
+    args.shift();
+  }
+  if (logStyle && logStyle === 3) {
+    colorStyle = 'background: blue; color: white;';
+    args.shift();
+  }
+  //help debug during development. set boolWriteLog = false once you are ready to check-in the code
+  if (boolWriteLog) {
+    console.log(`%c Capi(${id}) - ${msg}`, colorStyle, ...args);
+  }
+};
+
+// This method should almost never be used directly, use send message instead.
+const sendMessageToFrame = function (message: any) {};
+
 /*
- * Broadcast a handshake reply to all iframes. Only the iframe with the
+ * Two-way mapping for apps and their registered listeners on simId & key pairs
+ */
+const registeredLocalChangeApps = {};
+const localChangeListeners = {};
+/*
+ * Broadcast a handshake reply to iframes. Only the iframe with the
  * same requestToken should accept the message. Other iframes should ignore
  * any HANDSHAKE_RESPONSE that has a different response.
  */
@@ -41,23 +72,18 @@ const handleOnReadyMessage = (message: any) => {};
 
 const handleApiRequest = (message: any) => {};
 
-/*
- * @since 0.94
- */
+/* */
 const handleResizeParentContainerRequest = (message: any) => {};
 
-/*
- * @since 1.01
- */
+/* */
 const handleAllowInternalAccessRequest = (message: any) => {};
 
 const handleRegisterLocalDataChange = (message: any) => {};
 /*
  * A router to call appropriate functions for handling different types of CapiMessages.
  */
-const capiMessageHandler = (message: any) => {
+export const capiMessageHandler = (message: any) => {
   //logIncoming(message);
-  // not a valid JanusCAPIRequestTypes, e.g., SPMMessage.js, VideoPostMessage.js
   if (!message.handshake) {
     return;
   }
