@@ -6,6 +6,7 @@ import {
   getAssignStatements,
 } from '../../../../../../adaptivity/scripting';
 import { RootState } from '../../../rootReducer';
+import { selectCurrentActivityTree } from '../../groups/selectors/deck';
 import { selectPreviewMode, selectSectionSlug } from '../../page/slice';
 import {
   AttemptSlice,
@@ -70,9 +71,10 @@ export const savePartState = createAsyncThunk(
 export const savePartStateToTree = createAsyncThunk(
   `${AttemptSlice}/savePartStateToTree`,
   async (payload: any, { dispatch, getState }) => {
-    const { attemptGuid, partAttemptGuid, response, activityTree } = payload;
+    const { attemptGuid, partAttemptGuid, response } = payload;
     const rootState = getState() as RootState;
 
+    const activityTree: any = selectCurrentActivityTree(rootState);
     const attemptRecord = selectById(rootState, attemptGuid);
     const partId = attemptRecord?.parts.find((p) => p.attemptGuid === partAttemptGuid)?.partId;
     if (!partId) {
@@ -90,13 +92,23 @@ export const savePartStateToTree = createAsyncThunk(
         // means its in the tree, but doesn't own or inherit this part (some grandparent likely)
         return Promise.resolve('does not own part but thats OK');
       }
+
+      const stateTreePrefix = `${activity.id}|stage`;
+      const responseTreeMap = response.input.reduce(
+        (result: { [x: string]: any }, item: { key: string; path: string }) => {
+          result[item.key] = { ...item, path: `${stateTreePrefix}.${item.path}` };
+          return result;
+        },
+        {},
+      );
       /* console.log('updating activity tree part: ', {
         attemptGuid,
         partAttemptGuid,
         activity,
-        response,
+        responseTreeMap,
       }); */
-      return dispatch(savePartState({ attemptGuid, partAttemptGuid, response }));
+
+      return dispatch(savePartState({ attemptGuid, partAttemptGuid, response: responseTreeMap }));
     });
     return Promise.all(updates);
   },
