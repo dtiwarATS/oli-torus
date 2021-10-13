@@ -1,4 +1,4 @@
-import { JanusCAPIRequestTypes } from './JanusCAPIRequestTypes';
+import { getJanusCAPIRequestTypeString, JanusCAPIRequestTypes } from './JanusCAPIRequestTypes';
 
 export const writeCapiLog = (id: string, msg: any, ...rest: any[]) => {
   const boolWriteLog = false;
@@ -22,6 +22,38 @@ export const writeCapiLog = (id: string, msg: any, ...rest: any[]) => {
     console.log(`%c Capi(${id}) - ${msg}`, colorStyle, ...args);
   }
 };
+interface CapiHandshake {
+  requestToken: string;
+  authToken: string;
+  version?: string;
+  config: any;
+}
+interface CapiMessage {
+  handshake: CapiHandshake;
+  options?: any;
+  type: JanusCAPIRequestTypes;
+  values: any;
+}
+
+const sendToIframe = (data: any) => {
+  simFrame?.contentWindow?.postMessage(JSON.stringify(data), '*');
+};
+
+const sendFormedResponse = (
+  handshake: CapiHandshake,
+  options: any,
+  type: JanusCAPIRequestTypes,
+  values: any,
+) => {
+  const responseMsg: CapiMessage = {
+    handshake,
+    options,
+    type,
+    values,
+  };
+  writeCapiLog(id, `Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `, 1, responseMsg);
+  sendToIframe(responseMsg);
+};
 
 // This method should almost never be used directly, use send message instead.
 const sendMessageToFrame = function (message: any) {};
@@ -36,7 +68,19 @@ const localChangeListeners = {};
  * same requestToken should accept the message. Other iframes should ignore
  * any HANDSHAKE_RESPONSE that has a different response.
  */
-const replyToHandshake = (handshake: any) => {};
+const replyToHandshake = (handshake: any) => {
+  const {
+    handshake: { requestToken: msgRequestToken },
+  } = handshake;
+  simLife.handshakeMade = true;
+  simLife.handshake.requestToken = msgRequestToken;
+
+  // taken from simcapi.js TODO move somewhere, use from settings
+  simLife.handshake.config = { context: context };
+
+  // TODO: here in the handshake response we should send come config...
+  sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.HANDSHAKE_RESPONSE, []);
+};
 /*
  * Handles the check trigger
  */
