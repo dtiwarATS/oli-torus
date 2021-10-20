@@ -38,7 +38,7 @@ const PartComponent: React.FC<AuthorProps | DeliveryProps> = (props) => {
     width: props.model.width,
   };
   if (
-    props.type !== 'janus-text-flow' ||
+    (props.type !== 'janus-text-flow' && props.type !== 'janus-capi-iframe') ||
     (props.type === 'janus-text-flow' && props.model.overrideHeight)
   ) {
     initialStyles.height = height;
@@ -71,7 +71,7 @@ const PartComponent: React.FC<AuthorProps | DeliveryProps> = (props) => {
 
     const sHeight = currentStateSnapshot[`stage.${props.id}.IFRAME_frameHeight`];
     if (sHeight !== undefined) {
-      styleChanges.height = sHeight as number;
+      /// styleChanges.height = sHeight as number;
     }
     setComponentStyle((previousStyle) => {
       return { ...previousStyle, ...styleChanges };

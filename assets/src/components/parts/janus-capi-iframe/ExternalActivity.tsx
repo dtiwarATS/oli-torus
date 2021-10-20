@@ -260,7 +260,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
     top: frameY,
     left: frameX, */
     width: '100%',
-    height: '100%',
+    height: frameHeight,
     zIndex: frameZ,
     // writing 'visible' by default will take precedence (inline styles) over
     // any (legacy) override css attempt at hiding it
@@ -634,12 +634,22 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
     if (frameWidth && data?.width) {
       const newW = parseFloat(data.width.value);
       modifiedData.width.value = newW;
+      if (modifiedData.width.type === 'relative') {
+        setFrameWidth(parseFloat(frameWidth.toString()) + newW);
+      } else {
+        setFrameWidth(newW);
+      }
     }
     if (frameHeight && data?.height) {
       const newH = parseFloat(data.height.value);
       modifiedData.height.value = newH;
+      if (modifiedData.height.type === 'relative') {
+        setFrameHeight(parseFloat(frameHeight.toString()) + newH);
+      } else {
+        setFrameHeight(newH);
+      }
     }
-    props.onResize({ id: `${id}`, settings: modifiedData });
+    //props.onResize({ id: `${id}`, settings: modifiedData });
     sendFormedResponse(
       simLife.handshake,
       {},
