@@ -10,7 +10,7 @@ import { parseBool, parseBoolean } from '../../../utils/common';
 import { PartComponentProps } from '../types/parts';
 import { getJanusCAPIRequestTypeString, JanusCAPIRequestTypes } from './JanusCAPIRequestTypes';
 import { CapiIframeModel } from './schema';
-
+import { writeCapiLog, capiMessageHandler } from './CapiHandler';
 const fakeUserStorage: any = {};
 const getFromUserStorage = async (simId: string | number, key: string | number) =>
   fakeUserStorage[simId]?.[key];
