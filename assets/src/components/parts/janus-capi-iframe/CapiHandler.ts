@@ -1,4 +1,3 @@
-import context from 'react-bootstrap/esm/AccordionContext';
 import { getJanusCAPIRequestTypeString, JanusCAPIRequestTypes } from './JanusCAPIRequestTypes';
 
 export const writeCapiLog = (id: string, msg: any, ...rest: any[]) => {
@@ -46,6 +45,7 @@ const sendFormedResponse = (
   type: JanusCAPIRequestTypes,
   values: any,
   iFrame: HTMLIFrameElement,
+  id: string,
 ) => {
   const responseMsg: CapiMessage = {
     handshake,
@@ -53,12 +53,12 @@ const sendFormedResponse = (
     type,
     values,
   };
-  writeCapiLog(`Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `, 1, responseMsg);
+  writeCapiLog(id, `Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `, 1, responseMsg);
   sendToIframe(responseMsg, iFrame);
 };
 
 // This method should almost never be used directly, use send message instead.
-const sendMessageToFrame = function (message: any, iFrame: HTMLIFrameElement) {};
+const sendMessageToFrame = function (message: any, iFrame: HTMLIFrameElement, id: string) {};
 
 /*
  * Two-way mapping for apps and their registered listeners on simId & key pairs
@@ -75,6 +75,7 @@ const replyToHandshake = (
   iFrame: HTMLIFrameElement,
   simLife: any,
   context: string,
+  id: string,
 ) => {
   const {
     handshake: { requestToken: msgRequestToken },
@@ -86,50 +87,65 @@ const replyToHandshake = (
   simLife.handshake.config = { context: context };
 
   // TODO: here in the handshake response we should send come config...
-  sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.HANDSHAKE_RESPONSE, [], iFrame);
+  sendFormedResponse(
+    simLife.handshake,
+    {},
+    JanusCAPIRequestTypes.HANDSHAKE_RESPONSE,
+    [],
+    iFrame,
+    id,
+  );
 };
 /*
  * Handles the check trigger
  */
-const handleCheckTrigger = function (message: any, iFrame: HTMLIFrameElement) {};
+const handleCheckTrigger = function (message: any, iFrame: HTMLIFrameElement, id: string) {};
 
 /*
  * Replaced notifyCheckResponse
  * Notify clients that check has been completed
  */
-const notifyCheckCompleteResponse = (iFrame: HTMLIFrameElement) => {};
+const notifyCheckCompleteResponse = (iFrame: HTMLIFrameElement, id: string) => {};
 
 /*
  * Notify clients that check has been clicked
  */
-const notifyCheckStartResponse = (iFrame: HTMLIFrameElement) => {};
+const notifyCheckStartResponse = (iFrame: HTMLIFrameElement, id: string) => {};
 
 /*
  * Update the snapshot with new values received from the appropriate iframe.
  */
-const updateSnapshot = (values: any, iFrame: HTMLIFrameElement) => {};
+const updateSnapshot = (values: any, iFrame: HTMLIFrameElement, id: string) => {};
 
 /*
  * Handles the get data
  */
-const handleGetData = (message: any, iFrame: HTMLIFrameElement) => {};
+const handleGetData = (message: any, iFrame: HTMLIFrameElement, id: string) => {};
 
 /*
  * Handles the set data
  */
-const handleSetData = (message: any, iFrame: HTMLIFrameElement) => {};
+const handleSetData = (message: any, iFrame: HTMLIFrameElement, id: string) => {};
 
-const handleOnReadyMessage = (message: any, iFrame: HTMLIFrameElement) => {};
+const handleOnReadyMessage = (message: any, iFrame: HTMLIFrameElement, id: string) => {};
 
-const handleApiRequest = (message: any, iFrame: HTMLIFrameElement) => {};
-
-/* */
-const handleResizeParentContainerRequest = (message: any, iFrame: HTMLIFrameElement) => {};
+const handleApiRequest = (message: any, iFrame: HTMLIFrameElement, id: string) => {};
 
 /* */
-const handleAllowInternalAccessRequest = (message: any, iFrame: HTMLIFrameElement) => {};
+const handleResizeParentContainerRequest = (
+  message: any,
+  iFrame: HTMLIFrameElement,
+  id: string,
+) => {};
 
-const handleRegisterLocalDataChange = (message: any, iFrame: HTMLIFrameElement) => {};
+/* */
+const handleAllowInternalAccessRequest = (
+  message: any,
+  iFrame: HTMLIFrameElement,
+  id: string,
+) => {};
+
+const handleRegisterLocalDataChange = (message: any, iFrame: HTMLIFrameElement, id: string) => {};
 /*
  * A router to call appropriate functions for handling different types of CapiMessages.
  */
@@ -138,6 +154,7 @@ export const capiMessageHandler = (
   iFrame: HTMLIFrameElement,
   simFrame: any,
   context: string,
+  id: string,
 ) => {
   //logIncoming(message);
   if (!message.handshake) {
@@ -146,34 +163,34 @@ export const capiMessageHandler = (
 
   switch (message.type) {
     case JanusCAPIRequestTypes.HANDSHAKE_REQUEST:
-      replyToHandshake(message.handshake, iFrame, simFrame, context);
+      replyToHandshake(message.handshake, iFrame, simFrame, context, id);
       break;
     case JanusCAPIRequestTypes.ON_READY:
-      handleOnReadyMessage(message, iFrame);
+      handleOnReadyMessage(message, iFrame, id);
       break;
     case JanusCAPIRequestTypes.VALUE_CHANGE:
-      updateSnapshot(message.values, iFrame);
+      updateSnapshot(message.values, iFrame, id);
       break;
     case JanusCAPIRequestTypes.CHECK_REQUEST:
-      handleCheckTrigger(message, iFrame);
+      handleCheckTrigger(message, iFrame, id);
       break;
     case JanusCAPIRequestTypes.GET_DATA_REQUEST:
-      handleGetData(message, iFrame);
+      handleGetData(message, iFrame, id);
       break;
     case JanusCAPIRequestTypes.SET_DATA_REQUEST:
-      handleSetData(message, iFrame);
+      handleSetData(message, iFrame, id);
       break;
     case JanusCAPIRequestTypes.API_CALL_REQUEST:
-      handleApiRequest(message, iFrame);
+      handleApiRequest(message, iFrame, id);
       break;
     case JanusCAPIRequestTypes.RESIZE_PARENT_CONTAINER_REQUEST:
-      handleResizeParentContainerRequest(message, iFrame);
+      handleResizeParentContainerRequest(message, iFrame, id);
       break;
     case JanusCAPIRequestTypes.ALLOW_INTERNAL_ACCESS:
-      handleAllowInternalAccessRequest(message, iFrame);
+      handleAllowInternalAccessRequest(message, iFrame, id);
       break;
     case JanusCAPIRequestTypes.REGISTER_LOCAL_DATA_CHANGE_LISTENER:
-      handleRegisterLocalDataChange(message, iFrame);
+      handleRegisterLocalDataChange(message, iFrame, id);
       break;
   }
 };
