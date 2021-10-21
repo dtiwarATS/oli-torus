@@ -1,3 +1,4 @@
+import context from 'react-bootstrap/esm/AccordionContext';
 import { getJanusCAPIRequestTypeString, JanusCAPIRequestTypes } from './JanusCAPIRequestTypes';
 
 export const writeCapiLog = (id: string, msg: any, ...rest: any[]) => {
@@ -35,8 +36,8 @@ interface CapiMessage {
   values: any;
 }
 
-const sendToIframe = (data: any) => {
-  simFrame?.contentWindow?.postMessage(JSON.stringify(data), '*');
+const sendToIframe = (data: any, iFrame: HTMLIFrameElement) => {
+  iFrame?.contentWindow?.postMessage(JSON.stringify(data), '*');
 };
 
 const sendFormedResponse = (
@@ -44,6 +45,7 @@ const sendFormedResponse = (
   options: any,
   type: JanusCAPIRequestTypes,
   values: any,
+  iFrame: HTMLIFrameElement,
 ) => {
   const responseMsg: CapiMessage = {
     handshake,
@@ -51,12 +53,12 @@ const sendFormedResponse = (
     type,
     values,
   };
-  writeCapiLog(id, `Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `, 1, responseMsg);
-  sendToIframe(responseMsg);
+  writeCapiLog(`Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `, 1, responseMsg);
+  sendToIframe(responseMsg, iFrame);
 };
 
 // This method should almost never be used directly, use send message instead.
-const sendMessageToFrame = function (message: any) {};
+const sendMessageToFrame = function (message: any, iFrame: HTMLIFrameElement) {};
 
 /*
  * Two-way mapping for apps and their registered listeners on simId & key pairs
@@ -68,7 +70,12 @@ const localChangeListeners = {};
  * same requestToken should accept the message. Other iframes should ignore
  * any HANDSHAKE_RESPONSE that has a different response.
  */
-const replyToHandshake = (handshake: any) => {
+const replyToHandshake = (
+  handshake: any,
+  iFrame: HTMLIFrameElement,
+  simLife: any,
+  context: string,
+) => {
   const {
     handshake: { requestToken: msgRequestToken },
   } = handshake;
@@ -79,54 +86,59 @@ const replyToHandshake = (handshake: any) => {
   simLife.handshake.config = { context: context };
 
   // TODO: here in the handshake response we should send come config...
-  sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.HANDSHAKE_RESPONSE, []);
+  sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.HANDSHAKE_RESPONSE, [], iFrame);
 };
 /*
  * Handles the check trigger
  */
-const handleCheckTrigger = function (message: any) {};
+const handleCheckTrigger = function (message: any, iFrame: HTMLIFrameElement) {};
 
 /*
  * Replaced notifyCheckResponse
  * Notify clients that check has been completed
  */
-const notifyCheckCompleteResponse = () => {};
+const notifyCheckCompleteResponse = (iFrame: HTMLIFrameElement) => {};
 
 /*
  * Notify clients that check has been clicked
  */
-const notifyCheckStartResponse = () => {};
+const notifyCheckStartResponse = (iFrame: HTMLIFrameElement) => {};
 
 /*
  * Update the snapshot with new values received from the appropriate iframe.
  */
-const updateSnapshot = (values: any) => {};
+const updateSnapshot = (values: any, iFrame: HTMLIFrameElement) => {};
 
 /*
  * Handles the get data
  */
-const handleGetData = (message: any) => {};
+const handleGetData = (message: any, iFrame: HTMLIFrameElement) => {};
 
 /*
  * Handles the set data
  */
-const handleSetData = (message: any) => {};
+const handleSetData = (message: any, iFrame: HTMLIFrameElement) => {};
 
-const handleOnReadyMessage = (message: any) => {};
+const handleOnReadyMessage = (message: any, iFrame: HTMLIFrameElement) => {};
 
-const handleApiRequest = (message: any) => {};
-
-/* */
-const handleResizeParentContainerRequest = (message: any) => {};
+const handleApiRequest = (message: any, iFrame: HTMLIFrameElement) => {};
 
 /* */
-const handleAllowInternalAccessRequest = (message: any) => {};
+const handleResizeParentContainerRequest = (message: any, iFrame: HTMLIFrameElement) => {};
 
-const handleRegisterLocalDataChange = (message: any) => {};
+/* */
+const handleAllowInternalAccessRequest = (message: any, iFrame: HTMLIFrameElement) => {};
+
+const handleRegisterLocalDataChange = (message: any, iFrame: HTMLIFrameElement) => {};
 /*
  * A router to call appropriate functions for handling different types of CapiMessages.
  */
-export const capiMessageHandler = (message: any) => {
+export const capiMessageHandler = (
+  message: any,
+  iFrame: HTMLIFrameElement,
+  simFrame: any,
+  context: string,
+) => {
   //logIncoming(message);
   if (!message.handshake) {
     return;
@@ -134,34 +146,34 @@ export const capiMessageHandler = (message: any) => {
 
   switch (message.type) {
     case JanusCAPIRequestTypes.HANDSHAKE_REQUEST:
-      replyToHandshake(message.handshake);
+      replyToHandshake(message.handshake, iFrame, simFrame, context);
       break;
     case JanusCAPIRequestTypes.ON_READY:
-      handleOnReadyMessage(message);
+      handleOnReadyMessage(message, iFrame);
       break;
     case JanusCAPIRequestTypes.VALUE_CHANGE:
-      updateSnapshot(message.values);
+      updateSnapshot(message.values, iFrame);
       break;
     case JanusCAPIRequestTypes.CHECK_REQUEST:
-      handleCheckTrigger(message);
+      handleCheckTrigger(message, iFrame);
       break;
     case JanusCAPIRequestTypes.GET_DATA_REQUEST:
-      handleGetData(message);
+      handleGetData(message, iFrame);
       break;
     case JanusCAPIRequestTypes.SET_DATA_REQUEST:
-      handleSetData(message);
+      handleSetData(message, iFrame);
       break;
     case JanusCAPIRequestTypes.API_CALL_REQUEST:
-      handleApiRequest(message);
+      handleApiRequest(message, iFrame);
       break;
     case JanusCAPIRequestTypes.RESIZE_PARENT_CONTAINER_REQUEST:
-      handleResizeParentContainerRequest(message);
+      handleResizeParentContainerRequest(message, iFrame);
       break;
     case JanusCAPIRequestTypes.ALLOW_INTERNAL_ACCESS:
-      handleAllowInternalAccessRequest(message);
+      handleAllowInternalAccessRequest(message, iFrame);
       break;
     case JanusCAPIRequestTypes.REGISTER_LOCAL_DATA_CHANGE_LISTENER:
-      handleRegisterLocalDataChange(message);
+      handleRegisterLocalDataChange(message, iFrame);
       break;
   }
 };
