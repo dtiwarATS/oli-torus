@@ -34,11 +34,6 @@ interface CapiMessage {
   type: JanusCAPIRequestTypes;
   values: any;
 }
-
-const sendToIframe = (data: any, iFrame: HTMLIFrameElement) => {
-  iFrame?.contentWindow?.postMessage(JSON.stringify(data), '*');
-};
-
 const sendFormedResponse = (
   handshake: CapiHandshake,
   options: any,
@@ -54,11 +49,13 @@ const sendFormedResponse = (
     values,
   };
   writeCapiLog(id, `Response (${getJanusCAPIRequestTypeString(type)} : ${type}): `, 1, responseMsg);
-  sendToIframe(responseMsg, iFrame);
+  sendMessageToFrame(responseMsg, iFrame, id);
 };
 
 // This method should almost never be used directly, use send message instead.
-const sendMessageToFrame = function (message: any, iFrame: HTMLIFrameElement, id: string) {};
+const sendMessageToFrame = function (message: any, iFrame: HTMLIFrameElement, id: string) {
+  iFrame?.contentWindow?.postMessage(JSON.stringify(message), '*');
+};
 
 /*
  * Two-way mapping for apps and their registered listeners on simId & key pairs
