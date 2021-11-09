@@ -6,6 +6,7 @@ import {
   getAssignStatements,
 } from '../../../../../../adaptivity/scripting';
 import { RootState } from '../../../rootReducer';
+import { selectCurrentActivityTree } from '../../groups/selectors/deck';
 import { selectPreviewMode, selectSectionSlug } from '../../page/slice';
 import {
   AttemptSlice,
@@ -14,14 +15,62 @@ import {
   upsertActivityAttemptState,
 } from '../slice';
 
+const getChildResponseMap = (rootState: any, response: any) => {
+  const currentActivityTree = selectCurrentActivityTree(rootState);
+  let responseMap;
+  if (currentActivityTree) {
+    const currentActivity = currentActivityTree[currentActivityTree.length - 1];
+    const statePrefix = `${currentActivity.id}|stage`;
+    responseMap = Object.keys(response).reduce((acc: { [x: string]: any }, key) => {
+      const updatedLayerActivityResponse = response[key].path.split('|stage.')[1];
+      acc[key] = { ...response[key], path: `${statePrefix}.${updatedLayerActivityResponse}` };
+
+      return acc;
+    }, {});
+  }
+  return responseMap;
+};
+const handleParentChildActivityVariableSync = (rootState: any, response: any) => {
+  const currentActivityTree = selectCurrentActivityTree(rootState);
+  let assignScripts: string[] = [];
+  if (currentActivityTree) {
+    const responseMap = getChildResponseMap(rootState, response) || [];
+    assignScripts = getAssignStatements(responseMap);
+  }
+  return assignScripts;
+};
+const handleParentChildActivityAttemptStateSync = async (
+  dispatch: any,
+  attemptRecord: any,
+  partAttemptRecord: any,
+  rootState: any,
+  response: any,
+) => {
+  const updated = {
+    ...attemptRecord,
+    parts: attemptRecord.parts.map((p: any) => {
+      const result = { ...p };
+      if (p.attemptGuid === partAttemptRecord.attemptGuid) {
+        result.response = getChildResponseMap(rootState, response);
+      }
+      return result;
+    }),
+  };
+  await dispatch(upsertActivityAttemptState({ attempt: updated }));
+};
 export const savePartState = createAsyncThunk(
   `${AttemptSlice}/savePartState`,
   async (payload: any, { dispatch, getState }) => {
-    const { attemptGuid, partAttemptGuid, response } = payload;
+    const { attemptGuid, partAttemptGuid, response, activityId } = payload;
     const rootState = getState() as RootState;
     const isPreviewMode = selectPreviewMode(rootState);
     const sectionSlug = selectSectionSlug(rootState);
-
+    let currentActivityTreeId = -1;
+    const currentActivityTree = selectCurrentActivityTree(rootState);
+    if (currentActivityTree) {
+      const currentActivity = currentActivityTree[currentActivityTree.length - 1];
+      currentActivityTreeId = currentActivity.id;
+    }
     // update redux state to match optimistically
     const attemptRecord = selectById(rootState, attemptGuid);
     if (attemptRecord) {
@@ -37,16 +86,30 @@ export const savePartState = createAsyncThunk(
             return result;
           }),
         };
+        if (currentActivityTreeId !== activityId) {
+          handleParentChildActivityAttemptStateSync(
+            dispatch,
+            attemptRecord,
+            partAttemptRecord,
+            rootState,
+            response,
+          );
+        }
         await dispatch(upsertActivityAttemptState({ attempt: updated }));
       }
     }
+    const assignScriptsChild =
+      currentActivityTreeId !== activityId
+        ? handleParentChildActivityVariableSync(rootState, response)
+        : [];
 
     // update scripting env with latest values
     const assignScripts = getAssignStatements(response);
+    const finalAssignScripts = [...assignScripts, ...assignScriptsChild];
     const scriptResult: string[] = [];
-    if (Array.isArray(assignScripts)) {
+    if (Array.isArray(finalAssignScripts)) {
       //Need to execute scripts one-by-one so that error free expression are evaluated and only the expression with error fails. It should not have any impacts
-      assignScripts.forEach((variable: string) => {
+      finalAssignScripts.forEach((variable: string) => {
         // update scripting env with latest values
         const { result } = evalScript(variable, defaultGlobalEnv);
         //Usually, the result is always null if expression is executes successfully. If there are any errors only then the result contains the error message
@@ -72,14 +135,14 @@ export const savePartStateToTree = createAsyncThunk(
   async (payload: any, { dispatch, getState }) => {
     const { attemptGuid, partAttemptGuid, response, activityTree } = payload;
     const rootState = getState() as RootState;
-
+    const currentActivityTree = selectCurrentActivityTree(rootState) || activityTree;
+    const currentActivity = currentActivityTree[currentActivityTree.length - 1];
     const attemptRecord = selectById(rootState, attemptGuid);
     const partId = attemptRecord?.parts.find((p) => p.attemptGuid === partAttemptGuid)?.partId;
     if (!partId) {
       throw new Error('cannot find the partId to update');
     }
-
-    const updates = activityTree.map((activity: any) => {
+    const updates = currentActivityTree?.map((activity: any) => {
       const attempt = selectActivityAttemptState(rootState, activity.resourceId);
       if (!attempt) {
         return Promise.reject('could not find attempt!');
@@ -90,14 +153,33 @@ export const savePartStateToTree = createAsyncThunk(
         // means its in the tree, but doesn't own or inherit this part (some grandparent likely)
         return Promise.resolve('does not own part but thats OK');
       }
-      /* console.log('updating activity tree part: ', {
+
+      const statePrefix = `${activity.id}|stage`;
+      const responseMap = response.input.reduce(
+        (result: { [x: string]: any }, item: { key: string; path: string }) => {
+          result[item.key] = { ...item, path: `${statePrefix}.${item.path}` };
+          return result;
+        },
+        {},
+      );
+
+      /*console.log('updating activity tree part: ', {
         attemptGuid,
         partAttemptGuid,
         activity,
         response,
-      }); */
-      return dispatch(savePartState({ attemptGuid, partAttemptGuid, response }));
+        responseMap,
+      });*/
+      return dispatch(
+        savePartState({
+          attemptGuid,
+          partAttemptGuid,
+          response: responseMap,
+          activityId: currentActivity.id,
+        }),
+      );
     });
+
     return Promise.all(updates);
   },
 );

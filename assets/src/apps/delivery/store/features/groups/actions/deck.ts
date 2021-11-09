@@ -155,6 +155,8 @@ export const initializeActivity = createAsyncThunk(
     });
 
     thunkApi.dispatch(setInitStateFacts({ facts: arrInitFacts }));
+    console.log('calling facts', { globalizedInitState });
+
     const results = bulkApplyState([...sessionOps, ...globalizedInitState], defaultGlobalEnv);
     const applyStateHasErrors = results.some((r) => r.result !== null);
     if (applyStateHasErrors) {

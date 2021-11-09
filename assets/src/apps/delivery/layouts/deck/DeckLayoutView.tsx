@@ -360,13 +360,18 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
           savePartStateToTree({
             attemptGuid,
             partAttemptGuid,
-            response: responseMap,
+            response,
             activityTree: currentActivityTree,
           }),
         );
       } else {
         result = await dispatch(
-          savePartState({ attemptGuid, partAttemptGuid, response: responseMap }),
+          savePartState({
+            attemptGuid,
+            partAttemptGuid,
+            response: responseMap,
+            activityId: currentActivity.id,
+          }),
         );
       }
       return { result, snapshot: getLocalizedStateSnapshot(currentActivityIds) };

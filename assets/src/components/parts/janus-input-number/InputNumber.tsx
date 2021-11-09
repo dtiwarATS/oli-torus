@@ -72,6 +72,23 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = (props) => {
     setReady(true);
   }, []);
 
+  const handleParentChildSync = (snapshot: any) => {
+    const sValue = snapshot[`stage.${id}.value`];
+
+    if (sValue !== undefined && !Number.isNaN(sValue)) {
+      props.onSave({
+        id: `${id}`,
+        responses: [
+          {
+            key: 'value',
+            type: CapiVariableTypes.NUMBER,
+            value: sValue,
+          },
+        ],
+      });
+    }
+  };
+
   useEffect(() => {
     if (!props.notify) {
       return;
@@ -111,7 +128,7 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = (props) => {
             break;
           case NotificationType.CONTEXT_CHANGED:
             {
-              const { initStateFacts } = payload;
+              const { initStateFacts, snapshot } = payload;
 
               const sEnabled = initStateFacts[`stage.${id}.enabled`];
               if (sEnabled !== undefined) {
@@ -125,6 +142,7 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = (props) => {
               if (sCssClass !== undefined) {
                 setCssClass(sCssClass);
               }
+              handleParentChildSync(snapshot);
             }
             break;
         }
