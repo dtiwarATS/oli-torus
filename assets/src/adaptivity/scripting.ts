@@ -78,8 +78,8 @@ export const getExpressionStringForValue = (
       } else {
         const testVal = getValue('foo', testEnv);
         if (testVal === undefined) {
-          //if testVal is undefined then it's either a CSS string or a variable expression.
-          // it's almost impossible to know if its a CSS string so just checking if it has 'stage.' in it because it's a expression
+          //if testVal is 'undefined' then it's either a CSS string or a variable expression.
+          // it's almost impossible to know if its a CSS string so just checking if it has 'stage.' in it because it's a expression then
           if (!val.includes('stage.')) {
             actuallyAString = true;
           }
