@@ -58,6 +58,8 @@ export const getExpressionStringForValue = (
     // it might be CSS string, which can be decieving
     let actuallyAString = false;
     try {
+      const cssCRegex =
+        /^(([a-z0-9\\[\]=:]+\s?)|((div|span|body.*|.box-sizing:*|.columns-container.*|background-color.*)?(#|\.){1}[a-z0-9\-_\s?:]+\s?)+)(\{[\s\S][^}]*})$/im;
       const testEnv = new Environment(env);
       const evalResult = evalScript(`let foo = ${val};`, testEnv);
       // when evalScript is executed successfully, evalResult.result is null.
@@ -65,9 +67,7 @@ export const getExpressionStringForValue = (
       if (evalResult?.result !== null) {
         try {
           //trying to check if it is a CSS string.This might not handle any advance CSS string.
-          const matchingCssElements = val.match(
-            /^(([a-z0-9\\[\]=:]+\s?)|((div|span|body.*|.box-sizing:*|.columns-container.*|background-color.*)?(#|\.){1}[a-z0-9\-_\s?:]+\s?)+)(\{[\s\S][^}]*})$/im,
-          );
+          const matchingCssElements = val.match(cssCRegex);
           //matchingCssElements !== null then it means it's a CSS string so set actuallyAString=true so that it can be wrapped in ""
           if (matchingCssElements) {
             actuallyAString = true;
@@ -78,9 +78,14 @@ export const getExpressionStringForValue = (
       } else {
         const testVal = getValue('foo', testEnv);
         if (testVal === undefined) {
-          //if testVal is 'undefined' then it's either a CSS string or a variable expression.
-          // it's almost impossible to know if its a CSS string so just checking if it has 'stage.' in it because it's a expression then
-          if (!val.includes('stage.')) {
+          //trying to check if it is a CSS string.This might not handle any advance CSS string.
+          const matchingCssElements = val.match(cssCRegex);
+          //matchingCssElements !== null then it means it's a CSS string so set actuallyAString=true so that it can be wrapped in ""
+          if (matchingCssElements) {
+            actuallyAString = true;
+          } else if (!val.includes('stage.')) {
+            //if testVal is 'undefined' then it's either a CSS string (matchingCssElements might fail) or a variable expression.
+            // it's almost impossible to know if its a CSS string so just checking if it has 'stage.' in it because it's a expression then.
             actuallyAString = true;
           }
         }
