@@ -463,7 +463,7 @@ const Video: React.FC<PartComponentProps<VideoModel>> = (props) => {
       height="100%"
       /* className={cssClass} */
       autoPlay={autoPlay}
-      loop={autoPlay}
+      loop={enableReplay}
       controls={enableReplay}
       onEnded={handleVideoEnd}
       onPlay={handleVideoPlay}
