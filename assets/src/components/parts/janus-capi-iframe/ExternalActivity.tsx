@@ -845,12 +845,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
     };
   }, [simFrame]);
 
-  useEffect(() => {
-    if (!simLife.ready || simIsInitStatePassedOnce || !initState) {
-      return;
-    }
-
-    writeCapiLog('INIT STATE APPLIED', 3, { initState });
+  const KIPHack = () => {
     const arrInitStateVars = Object.keys(initState);
     //hack for KIP SIMs. 'CurrentEclipse' variables needs to be sent at last so moving it to last position in array.
     if (arrInitStateVars.indexOf('stage.orrery.Eclipses.Settings.CurrentEclipse') !== -1) {
@@ -861,6 +856,27 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
         )[0],
       );
     }
+    return arrInitStateVars;
+  };
+
+  const smallWorldHack = (baseKey: string, cVar: CapiVariable) => {
+    //hack for Small world type SIMs
+    if (baseKey.indexOf('System.AllowNextOnCacheCase') !== -1) {
+      const mFormatted: Record<string, unknown> = {};
+      const updatedVar = { ...cVar };
+      updatedVar.value = !parseBool(cVar.value);
+      mFormatted[baseKey] = updatedVar;
+      sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.VALUE_CHANGE, mFormatted);
+    }
+  };
+
+  useEffect(() => {
+    if (!simLife.ready || simIsInitStatePassedOnce || !initState) {
+      return;
+    }
+
+    writeCapiLog('INIT STATE APPLIED', 3, { initState });
+    const arrInitStateVars = KIPHack();
     arrInitStateVars.forEach((key: any) => {
       const formatted: Record<string, unknown> = {};
       const baseKey = key.replace(`stage.${id}.`, '').replace(`app.${id}.`, '');
@@ -870,14 +886,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
         value,
       });
       formatted[baseKey] = cVar;
-      //hack for Small world type SIMs
-      if (baseKey.indexOf('System.AllowNextOnCacheCase') !== -1) {
-        const mFormatted: Record<string, unknown> = {};
-        const updatedVar = { ...cVar };
-        updatedVar.value = !parseBool(cVar.value);
-        mFormatted[baseKey] = updatedVar;
-        sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.VALUE_CHANGE, mFormatted);
-      }
+      smallWorldHack(baseKey, cVar);
       sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.VALUE_CHANGE, formatted);
     });
     if (!simLife.init) {
