@@ -76,7 +76,7 @@ const OptionsPanel: React.FC<OptionsPanelProps> = ({ open }) => {
           </button>
         </div>
 
-        <div className={`option restartOption${enableHistory ? '' : ' displayNone'}`}>
+        <div className={`option restartOption`}>
           <button
             className="restartBtn btn"
             aria-label="Open restart lesson window"
