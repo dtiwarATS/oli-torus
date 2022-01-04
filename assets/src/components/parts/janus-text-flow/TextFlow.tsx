@@ -137,21 +137,22 @@ const TextFlow: React.FC<PartComponentProps<TextFlowModel>> = (props: any) => {
     } else if (Array.isArray(pNodes)) {
       tree = pNodes;
     }
+    console.log('allExpression');
     const allExpression = tree?.map((subtree: MarkupTree) => {
       return getTextExpressions(subtree || []);
     });
-
-    const finalExppression = allExpression.filter((expression) => expression);
-
+    console.log('allExpression', { allExpression });
+    const finalExpression = allExpression.filter((expression) => expression);
+    console.log('finalExpression', { finalExpression });
     const initResult = await props.onInit({
       id,
       responses: [],
-      expressions: finalExppression,
+      expressions: finalExpression,
     });
     // result of init has a state snapshot with latest (init state applied)
     const currentStateSnapshot = initResult.snapshot;
     setState(currentStateSnapshot);
-
+    console.log('initialize', { initResult });
     if (initResult.env) {
       // make a child scope so that any textflow scripts can't affect the parent
       const flowEnv = new Environment(initResult.env);
@@ -169,6 +170,7 @@ const TextFlow: React.FC<PartComponentProps<TextFlowModel>> = (props: any) => {
   }, []);
 
   useEffect(() => {
+    console.log('useEffect - model');
     initialize(model);
   }, [model]);
 

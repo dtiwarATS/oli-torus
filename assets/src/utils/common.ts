@@ -1,3 +1,5 @@
+import { getValue } from '../adaptivity/scripting';
+
 /**
  * Returns the given value if it is not null or undefined. Otherwise, it returns
  * the default value. The return value will always be a defined value of the type given
@@ -156,3 +158,44 @@ export const parseNumString = (item: string): string | number => {
 // Zips two arrays. E.g. zip([1,2,3], [4,5,6,7]) == [[1, 4], [2, 5], [3, 6]]
 export const zip = <T, U>(xs1: T[], xs2: U[]): [T, U][] =>
   xs1.reduce((acc, x, i) => (i > xs2.length - 1 ? acc : acc.concat([[x, xs2[i]]])), [] as [T, U][]);
+
+const getActualOwnerIdentifier = (
+  identifierExpression: string,
+  sequence: any,
+  defaultGlobalEnv: any,
+) => {
+  const [activityId, part] = identifierExpression.split('|');
+  const activitySequence = sequence.find((entry: any) => entry?.custom?.sequenceId === activityId);
+  if (!activitySequence) {
+    return identifierExpression;
+  }
+  const activityLayerId = activitySequence?.custom?.layerRef;
+  let expressionValue = getValue(identifierExpression, defaultGlobalEnv);
+  let updatedExpression = identifierExpression;
+  if (expressionValue == undefined) {
+    expressionValue = getValue(activityLayerId + '|' + part, defaultGlobalEnv);
+    if (expressionValue !== undefined) {
+      updatedExpression = activityLayerId + '|' + part;
+    } else if (activityLayerId) {
+      updatedExpression = activityLayerId + '|' + part;
+      updatedExpression = getActualOwnerIdentifier(updatedExpression, sequence, defaultGlobalEnv);
+    }
+  }
+  return updatedExpression;
+};
+
+export const processPartVariablesExpressions = (
+  originalExpression: string,
+  sequence: any,
+  defaultGlobalEnv: any,
+) => {
+  if (originalExpression.indexOf('stage.') === -1) {
+    return { originalExpression, expressioinWithActualOwnerId: originalExpression };
+  }
+  const updatedExpression = getActualOwnerIdentifier(
+    originalExpression,
+    sequence,
+    defaultGlobalEnv,
+  );
+  return { originalExpression, expressioinWithActualOwnerId: updatedExpression };
+};
