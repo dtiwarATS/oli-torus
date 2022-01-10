@@ -11,6 +11,7 @@ import {
 import { ResourceId } from 'data/types';
 import guid from 'utils/guid';
 import {
+  applyState,
   ApplyStateOperation,
   bulkApplyState,
   defaultGlobalEnv,
@@ -162,6 +163,7 @@ export const initializeActivity = createAsyncThunk(
     // in that case they actually need to be written to the parent layer values
     const initState = currentActivity?.content?.custom?.facts || [];
     const arrInitFacts: Record<string, string> = {};
+    const arrBindToVars: Record<string, number> = {};
     const globalizedInitState = initState.map((s: any) => {
       arrInitFacts[s.target] = s.type;
       if (s.target.indexOf('stage.') !== 0) {
@@ -179,10 +181,32 @@ export const initializeActivity = createAsyncThunk(
         // shouldn't happen, but ignore I guess
         return { ...s, value: modifiedValue };
       }
+      if (s.operator === 'bind to') {
+        arrBindToVars[modifiedValue] = s.type;
+      }
       return { ...s, target: `${ownerActivity.id}|${s.target}`, value: modifiedValue };
     });
     console.log({ initState, globalizedInitState });
+    //if a variable is 'bindTo' another variable then we need to make sure that we reset the value of the original variable to ''
+    //otherwise if that original variable is already evaluated on previous screen then on the current screen, those values will be automatically populated
+    // for the current bindto target on page load by default which don't want
+    Object.keys(arrBindToVars).forEach((bindToVar) => {
+      let varValue: string | number | unknown = '';
+      const type: number = arrBindToVars[bindToVar];
+      console.log({ type, arrBindToVars });
 
+      if (type === CapiVariableTypes.NUMBER) {
+        varValue = 0;
+      } else if (type === CapiVariableTypes.ARRAY) {
+        varValue = [];
+      }
+      const applyOperation: ApplyStateOperation = {
+        target: bindToVar,
+        operator: '=',
+        value: varValue,
+      };
+      applyState(applyOperation, defaultGlobalEnv);
+    });
     thunkApi.dispatch(setInitStateFacts({ facts: arrInitFacts }));
     const results = bulkApplyState([...sessionOps, ...globalizedInitState], defaultGlobalEnv);
     const applyStateHasErrors = results.some((r) => r.result !== null);
