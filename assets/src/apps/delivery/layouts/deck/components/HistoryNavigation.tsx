@@ -15,12 +15,19 @@ import {
   setShowHistory,
 } from '../../../store/features/page/slice';
 import HistoryPanel from './HistoryPanel';
-
+export interface HistoryNavigationProps {
+  id: string;
+  name: string;
+  timestamp?: string;
+}
 const HistoryNavigation: React.FC = () => {
   const currentActivityId = useSelector(selectCurrentActivityId);
   const enableHistory = useSelector(selectEnableHistory);
   const showHistory = useSelector(selectShowHistory);
-
+  //TODO need to find the difference between history mode navigation v/S allow forward navigation
+  // history mode navigation - disable all the controls on the screens studen already visited and history panle only shows the screens that student visited.
+  //allow forward navigation - displayes all the screens in the history panel and we don't disable the controls
+  const allowForwardNavigation = true;
   const sequences = useSelector(selectSequence);
   const dispatch = useDispatch();
 
@@ -41,7 +48,8 @@ const HistoryNavigation: React.FC = () => {
     .map((entry) => entry.split('.')[2]);
 
   // Get the activity names and ids to be displayed in the history panel
-  const historyItems = globalSnapshot?.map((activityId) => {
+  let historyItems: HistoryNavigationProps[] = [];
+  historyItems = globalSnapshot?.map((activityId) => {
     const foundSequence = sequences.filter(
       (sequence) => sequence.custom?.sequenceId === activityId,
     )[0];
@@ -51,33 +59,59 @@ const HistoryNavigation: React.FC = () => {
       timestamp: snapshot[`session.visitTimestamps.${foundSequence.custom?.sequenceId}`],
     };
   });
+  if (allowForwardNavigation) {
+    const foundSequence = sequences.filter((sequence) => !sequence.custom?.isLayer);
+    historyItems = foundSequence?.map((sequence) => {
+      return {
+        id: sequence.custom?.sequenceId,
+        name: sequence.custom?.sequenceName || sequence.id,
+      };
+    });
+  }
   const currentHistoryActivityIndex = historyItems.findIndex(
     (item: any) => item.id === currentActivityId,
   );
-  const isFirst = currentHistoryActivityIndex === historyItems.length - 1;
-  const isLast = currentHistoryActivityIndex === 0;
+  const previousScreenIndex = allowForwardNavigation
+    ? currentHistoryActivityIndex + 1
+    : currentHistoryActivityIndex - 1;
+
+  const nextScreenIndex = allowForwardNavigation
+    ? currentHistoryActivityIndex - 1
+    : currentHistoryActivityIndex + 1;
+
+  const isFirst = allowForwardNavigation
+    ? currentHistoryActivityIndex === 0
+    : currentHistoryActivityIndex === historyItems.length - 1;
+
+  const isLast = allowForwardNavigation
+    ? currentHistoryActivityIndex === historyItems.length - 1
+    : currentHistoryActivityIndex === 0;
   const nextHandler = () => {
-    const prevActivity = historyItems[currentHistoryActivityIndex - 1];
+    const prevActivity = historyItems[previousScreenIndex];
     dispatch(navigateToActivity(prevActivity.id));
 
     const nextHistoryActivityIndex = historyItems.findIndex(
       (item: any) => item.id === prevActivity.id,
     );
-    dispatch(
-      setHistoryNavigationTriggered({
-        historyModeNavigation: nextHistoryActivityIndex !== 0,
-      }),
-    );
+    if (!allowForwardNavigation) {
+      dispatch(
+        setHistoryNavigationTriggered({
+          historyModeNavigation: nextHistoryActivityIndex !== 0,
+        }),
+      );
+    }
   };
 
   const prevHandler = () => {
-    const prevActivity = historyItems[currentHistoryActivityIndex + 1];
+    const prevActivity = historyItems[nextScreenIndex];
     dispatch(navigateToActivity(prevActivity.id));
-    dispatch(
-      setHistoryNavigationTriggered({
-        historyModeNavigation: true,
-      }),
-    );
+    if (!allowForwardNavigation) {
+      dispatch(
+        setHistoryNavigationTriggered({
+          historyModeNavigation: true,
+        }),
+      );
+    }
   };
   return (
     <Fragment>
@@ -125,6 +159,7 @@ const HistoryNavigation: React.FC = () => {
                 items={historyItems}
                 onMinimize={minimizeHandler}
                 onRestart={restartHandler}
+                allowForwardNavigation={allowForwardNavigation}
               />
             </Fragment>
           ) : (

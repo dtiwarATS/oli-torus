@@ -18,9 +18,15 @@ interface HistoryPanelProps {
   items: HistoryEntry[];
   onMinimize: any; // function?
   onRestart: any; // function
+  allowForwardNavigation?: boolean;
 }
 
-const HistoryPanel: React.FC<HistoryPanelProps> = ({ items, onMinimize, onRestart }) => {
+const HistoryPanel: React.FC<HistoryPanelProps> = ({
+  items,
+  onMinimize,
+  onRestart,
+  allowForwardNavigation,
+}) => {
   const dispatch = useDispatch();
   const currentActivityId = useSelector(selectCurrentActivityId);
   // TODO: we need to track this as a separate ID
@@ -32,11 +38,13 @@ const HistoryPanel: React.FC<HistoryPanelProps> = ({ items, onMinimize, onRestar
     const nextHistoryActivityIndex = items.findIndex(
       (historyItem: any) => historyItem.id === item.id,
     );
-    dispatch(
-      setHistoryNavigationTriggered({
-        historyModeNavigation: nextHistoryActivityIndex !== 0,
-      }),
-    );
+    if (!allowForwardNavigation) {
+      dispatch(
+        setHistoryNavigationTriggered({
+          historyModeNavigation: nextHistoryActivityIndex !== 0,
+        }),
+      );
+    }
   };
 
   const getItemClasses = (item: HistoryEntry) => {
