@@ -25,6 +25,7 @@ export interface DeliveryProps {
   activityGuidMapping: any;
   previewMode?: boolean;
   enableHistory?: boolean;
+  allowBackwordForwardNavigation?: boolean;
   activityTypes?: any[];
   graded: boolean;
 }
@@ -43,6 +44,7 @@ const Delivery: React.FC<DeliveryProps> = ({
   activityTypes = [],
   previewMode = false,
   enableHistory = false,
+  allowBackwordForwardNavigation = false,
   graded = false,
 }) => {
   const dispatch = useDispatch();
@@ -73,6 +75,7 @@ const Delivery: React.FC<DeliveryProps> = ({
         previewMode: !!previewMode,
         activityTypes,
         enableHistory,
+        allowBackwordForwardNavigation,
         showHistory: false,
         score: 0,
         graded,

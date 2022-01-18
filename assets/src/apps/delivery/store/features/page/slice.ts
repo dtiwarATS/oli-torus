@@ -15,6 +15,7 @@ export interface PageState {
   activityGuidMapping: any;
   previewMode: boolean;
   enableHistory: boolean;
+  allowBackwordForwardNavigation: boolean;
   showHistory: boolean;
   activityTypes: any[];
   score: number;
@@ -35,6 +36,7 @@ const initialState: PageState = {
   activityGuidMapping: {},
   previewMode: false,
   enableHistory: false,
+  allowBackwordForwardNavigation: false,
   showHistory: false,
   activityTypes: [],
   score: 0,
@@ -58,6 +60,9 @@ const pageSlice = createSlice({
         action.payload?.content?.custom?.allowNavigation ||
         action.payload?.content?.custom?.enableHistory ||
         false;
+      state.allowBackwordForwardNavigation =
+        action.payload?.content?.custom?.allowBackwordForwardNavigation;
+      false;
       state.resourceAttemptGuid = action.payload.resourceAttemptGuid;
       state.resourceAttemptState = action.payload.resourceAttemptState;
       state.activityGuidMapping = action.payload.activityGuidMapping;
@@ -92,6 +97,10 @@ export const selectPageSlug = createSelector(selectState, (state) => state.pageS
 export const selectPageContent = createSelector(selectState, (state) => state.content);
 export const selectPreviewMode = createSelector(selectState, (state) => state.previewMode);
 export const selectEnableHistory = createSelector(selectState, (state) => state.enableHistory);
+export const selectAllowBackwordForwardNavigation = createSelector(
+  selectState,
+  (state) => state.allowBackwordForwardNavigation,
+);
 export const selectShowHistory = createSelector(selectState, (state) => state.showHistory);
 export const selectResourceAttemptGuid = createSelector(
   selectState,

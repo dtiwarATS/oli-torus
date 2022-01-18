@@ -70,6 +70,10 @@ const lessonSchema: JSONSchema7 = {
           title: 'Enable History',
           type: 'boolean',
         },
+        allowBackwordForwardNavigation: {
+          title: 'Allow back/forward navigation',
+          type: 'boolean',
+        },
         ScoreOverview: {
           type: 'object',
           properties: {
@@ -165,6 +169,7 @@ export const transformModelToSchema = (model: any) => {
       title: model.title,
       customCSS: model.customCss,
       enableHistory: model.custom.allowNavigation || model.custom.enableHistory || false,
+      allowBackwordForwardNavigation: model.custom.allowBackwordForwardNavigation || false,
     },
     CustomLogic: {
       variables: JSON.stringify(model.custom.variables),
@@ -196,6 +201,7 @@ export const transformSchemaToModel = (schema: any) => {
       enableLessonMax: schema.Properties.ScoreOverview.enableLessonMax,
       lessonMax: schema.Properties.ScoreOverview.lessonMax,
       enableHistory: schema.Properties.enableHistory,
+      allowBackwordForwardNavigation: schema.Properties.allowBackwordForwardNavigation,
       variables,
       logoutMessage: schema.Properties.FinishPanel.logoutMessage,
       logoutPanelImageURL: schema.Properties.FinishPanel.logoutPanelImageURL,

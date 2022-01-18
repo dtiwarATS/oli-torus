@@ -10,6 +10,7 @@ import {
 import { navigateToActivity } from '../../../store/features/groups/actions/deck';
 import { selectSequence } from '../../../store/features/groups/selectors/deck';
 import {
+  selectAllowBackwordForwardNavigation,
   selectEnableHistory,
   selectShowHistory,
   setShowHistory,
@@ -24,10 +25,10 @@ const HistoryNavigation: React.FC = () => {
   const currentActivityId = useSelector(selectCurrentActivityId);
   const enableHistory = useSelector(selectEnableHistory);
   const showHistory = useSelector(selectShowHistory);
-  //TODO need to find the difference between history mode navigation v/S allow forward navigation
+  //difference between history mode navigation v/S allow forward navigation
   // history mode navigation - disable all the controls on the screens studen already visited and history panle only shows the screens that student visited.
   //allow forward navigation - displayes all the screens in the history panel and we don't disable the controls
-  const allowForwardNavigation = true;
+  const allowForwardNavigation = useSelector(selectAllowBackwordForwardNavigation);
   const sequences = useSelector(selectSequence);
   const dispatch = useDispatch();
 

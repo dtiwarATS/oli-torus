@@ -57,7 +57,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
   const [pageClasses, setPageClasses] = useState<string[]>([]);
   const [activityClasses, setActivityClasses] = useState<string[]>([...defaultClasses]);
   const [lessonStyles, setLessonStyles] = useState<any>({});
-  const enableHistory = useSelector(selectEnableHistory);
   // Background
   const backgroundClasses = ['background'];
   const backgroundStyles: CSSProperties = {};
