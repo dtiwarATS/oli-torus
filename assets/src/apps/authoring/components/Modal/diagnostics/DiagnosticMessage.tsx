@@ -13,6 +13,13 @@ export const DupeMessage: React.FC<Message> = ({ problem }: Message) => (
   </span>
 );
 
+export const InvalidVariableMessage: React.FC<Message> = ({ problem }: Message) => (
+  <span>
+    Custom variable &quot;
+    <strong>{problem.id} </strong> &quot; is not getting evaluated.
+  </span>
+);
+
 export const PatternMessage: React.FC<Message> = ({ problem }: Message) => (
   <span>
     A {problem.item.type} component with the ID &quot;
@@ -110,6 +117,9 @@ export const DiagnosticMessage: React.FC<Message> = (props) => {
       break;
     case DiagnosticTypes.INVALID_EXPRESSION:
       action = <InvalidPartExpressionValue {...props} />;
+      break;
+    case DiagnosticTypes.INVALID_VARIABLE:
+      action = <InvalidVariableMessage {...props} />;
       break;
     default:
       action = <Fragment>No fix defined.</Fragment>;
