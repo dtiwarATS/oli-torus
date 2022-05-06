@@ -428,7 +428,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
 
   const writeCapiLog = (msg: any, ...rest: any[]) => {
     // TODO: change to a config value?
-    const boolWriteLog = false;
+    const boolWriteLog = true;
     let colorStyle = 'background: #222; color: #bada55';
     const [logStyle] = rest;
     const args = rest;
@@ -1077,6 +1077,33 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
           });
           cVar.value = val;
         }
+      }
+      if (baseKey.indexOf('Timeline.EventsToUse.Special') !== -1) {
+        cVar.value = ['1', '2'];
+        cVar.type = 3;
+      } else if (baseKey.indexOf('Timeline.Controls.Zoom.Max Years') !== -1) {
+        cVar.value = '6.0E9';
+        cVar.type = 2;
+      } else if (baseKey.indexOf('Timeline.special.specialEvents.EventS1.forceCorrect') !== -1) {
+        cVar.value = 'true';
+        cVar.type = 2;
+      } else if (baseKey.indexOf('Timeline.special.specialEvents.EventS2.userDate') !== -1) {
+        cVar.value = '-20.76794025621001';
+      } else if (baseKey.indexOf('Timeline.anthropologic.Enabled') !== -1) {
+        cVar.value = 'false';
+        cVar.type = 2;
+      } else if (baseKey.indexOf('Timeline.geological.Enabled') !== -1) {
+        cVar.value = 'false';
+        cVar.type = 2;
+      } else if (baseKey.indexOf('Timeline.EventsToUse.Cosmic') !== -1) {
+        cVar.value = ['11', '12'];
+        cVar.type = 3;
+      } else if (baseKey.indexOf('Timeline.biological.Enabled') !== -1) {
+        cVar.value = 'false';
+        cVar.type = 2;
+      } else if (baseKey.indexOf('Timeline.Controls.Zoom.Min Years') !== -1) {
+        cVar.value = '-6.0E9';
+        cVar.type = 2;
       }
       formatted[baseKey] = cVar;
       //hack for Small world type SIMs
