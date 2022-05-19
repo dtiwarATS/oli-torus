@@ -583,7 +583,7 @@ export const templatizeText = (
       } else if (typeof stateValue === 'object') {
         strValue = JSON.stringify(stateValue);
       } else if (typeof stateValue === 'number') {
-        const modifiedValue = formatNumber(strValue);
+        const modifiedValue = useFormattedText ? formatNumber(strValue) : strValue;
         strValue = parseFloat(modifiedValue.toString());
       }
     } else {
