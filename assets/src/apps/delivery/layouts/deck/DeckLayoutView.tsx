@@ -30,6 +30,7 @@ import {
 import {
   selectEnableHistory,
   selectPageSlug,
+  selectSectionSlug,
   selectUserName,
   setScore,
 } from '../../store/features/page/slice';
@@ -37,6 +38,9 @@ import { LayoutProps } from '../layouts';
 import DeckLayoutFooter from './DeckLayoutFooter';
 import DeckLayoutHeader from './DeckLayoutHeader';
 import { getLocalizedCurrentStateSnapshot } from 'apps/delivery/store/features/adaptivity/actions/getLocalizedCurrentStateSnapshot';
+import { createActivityAttempt } from 'apps/delivery/store/features/attempt/actions/createActivityAttempt';
+import { clone } from 'utils/common';
+import { upsertActivityAttemptState } from 'apps/delivery/store/features/attempt/slice';
 
 const InjectedStyles: React.FC<{ css?: string }> = (props) => {
   // migrated legacy include as customCss
@@ -57,6 +61,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
   const currentLesson = useSelector(selectPageSlug);
   const currentUserName = useSelector(selectUserName);
   const historyModeNavigation = useSelector(selectHistoryNavigationActivity);
+  const sectionSlug = useSelector(selectSectionSlug);
   const isEnd = useSelector(selectLessonEnd);
   const defaultClasses: any[] = ['lesson-loaded', previewMode ? 'previewView' : 'lessonView'];
   const [pageClasses, setPageClasses] = useState<string[]>([]);
@@ -159,6 +164,24 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     }
   }, [pageContent]);
 
+  const resetCurrentAttempt = async () => {
+    console.log('trying to reset the attemp');
+    if (!currentActivityAttemptTree) {
+      return;
+    }
+    const currentAttempt = currentActivityAttemptTree[currentActivityAttemptTree?.length - 1];
+    const currentActivityAttemptGuid = currentAttempt?.attemptGuid || '';
+    let attempt: any = clone(currentAttempt);
+    const { payload: newAttempt } = await dispatch(
+      createActivityAttempt({
+        sectionSlug,
+        attemptGuid: currentActivityAttemptGuid,
+        seedResponses: false,
+      }),
+    );
+    attempt = newAttempt;
+  };
+
   useEffect(() => {
     if (!currentActivityTree || currentActivityTree.length === 0) {
       return;
@@ -182,6 +205,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       console.log('REMOVING STATE VALUES: ', idsToBeRemoved); */
       if (idsToBeRemoved.length) {
         removeStateValues(defaultGlobalEnv, idsToBeRemoved);
+        resetCurrentAttempt();
       }
     }
     let timeout: NodeJS.Timeout;

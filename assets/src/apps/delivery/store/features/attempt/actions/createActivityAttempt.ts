@@ -10,7 +10,7 @@ import AttemptSlice from '../name';
 export const createActivityAttempt = createAsyncThunk(
   `${AttemptSlice}/createActivityAttempt`,
   async (payload: any, { dispatch, getState }) => {
-    const { sectionSlug, attemptGuid } = payload;
+    const { sectionSlug, attemptGuid, seedResponses = true } = payload;
     const rootState = getState() as RootState;
     const isPreviewMode = selectPreviewMode(rootState);
 
@@ -30,7 +30,6 @@ export const createActivityAttempt = createAsyncThunk(
       attempt.dateSubmitted = null;
       // keep the part responses
     } else {
-      const seedResponses = true; // parameterize at function level?
       const new_attempt_result = await createNewActivityAttempt(
         sectionSlug,
         attemptGuid,
