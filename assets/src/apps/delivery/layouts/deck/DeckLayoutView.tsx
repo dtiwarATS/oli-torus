@@ -164,25 +164,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     }
   }, [pageContent]);
 
-  const resetCurrentAttempt = async () => {
-    console.log('trying to reset the attemp');
-    if (!currentActivityAttemptTree) {
-      return;
-    }
-    const currentAttempt = currentActivityAttemptTree[currentActivityAttemptTree?.length - 1];
-    const currentActivityAttemptGuid = currentAttempt?.attemptGuid || '';
-    let attempt: any = clone(currentAttempt);
-    const { payload: newAttempt } = await dispatch(
-      createActivityAttempt({
-        sectionSlug,
-        attemptGuid: currentActivityAttemptGuid,
-        seedResponses: false,
-      }),
-    );
-    attempt = newAttempt;
-  };
-
-  useEffect(() => {
+  const initAct = async () => {
     if (!currentActivityTree || currentActivityTree.length === 0) {
       return;
     }
@@ -205,7 +187,10 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       console.log('REMOVING STATE VALUES: ', idsToBeRemoved); */
       if (idsToBeRemoved.length) {
         removeStateValues(defaultGlobalEnv, idsToBeRemoved);
-        resetCurrentAttempt();
+        const globalSnapshot = getEnvState(defaultGlobalEnv);
+        console.log({ globalSnapshot });
+
+        await resetCurrentAttempt();
       }
     }
     let timeout: NodeJS.Timeout;
@@ -277,6 +262,32 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       clearTimeout(timeout);
       sharedActivityPromise = null;
     };
+  };
+
+  const resetCurrentAttempt = async () => {
+    console.log('trying to reset the attemp');
+    if (!currentActivityAttemptTree) {
+      return;
+    }
+    const currentAttempt = currentActivityAttemptTree[currentActivityAttemptTree?.length - 1];
+    const currentActivityAttemptGuid = currentAttempt?.attemptGuid || '';
+    console.log({ currentAttempt });
+
+    let attempt: any = clone(currentAttempt);
+    const { payload: newAttempt } = await dispatch(
+      createActivityAttempt({
+        sectionSlug,
+        attemptGuid: currentActivityAttemptGuid,
+        seedResponses: false,
+      }),
+    );
+    console.log({ newAttempt });
+
+    attempt = newAttempt;
+  };
+
+  useEffect(() => {
+    initAct();
   }, [currentActivityTree]);
 
   useEffect(() => {
@@ -492,6 +503,8 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       const attempt = currentActivityAttemptTree?.find(
         (a) => a?.activityId === activity.resourceId,
       );
+
+      console.log({ attempt });
       if (!attempt) {
         console.error('could not find attempt state for ', activity);
         return;
@@ -521,7 +534,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
         {activities}
       </div>
     );
-  }, [currentActivityTree, lessonStyles]);
+  }, [currentActivityTree, currentActivityAttemptTree, lessonStyles]);
 
   useEffect(() => {
     if (!isEnd) {

@@ -28,6 +28,12 @@ export const createActivityAttempt = createAsyncThunk(
       attempt.outOf = 0;
       attempt.dateEvaluated = null;
       attempt.dateSubmitted = null;
+
+      if (!seedResponses) {
+        attempt.parts.forEach((part) => {
+          part.response = null;
+        });
+      }
       // keep the part responses
     } else {
       const new_attempt_result = await createNewActivityAttempt(
@@ -41,6 +47,7 @@ export const createActivityAttempt = createAsyncThunk(
       // because it's already based on the previous attemptGuid
       attempt.activityId = resourceId;
     }
+    console.log({ attempt });
 
     await dispatch(upsertActivityAttemptState({ attempt }));
 
