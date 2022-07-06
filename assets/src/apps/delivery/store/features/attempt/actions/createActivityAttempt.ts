@@ -47,8 +47,6 @@ export const createActivityAttempt = createAsyncThunk(
       // because it's already based on the previous attemptGuid
       attempt.activityId = resourceId;
     }
-    console.log({ attempt });
-
     await dispatch(upsertActivityAttemptState({ attempt }));
 
     return attempt;

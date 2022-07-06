@@ -33,7 +33,10 @@ import {
   selectLastMutateChanges,
   selectLastMutateTriggered,
 } from '../store/features/adaptivity/slice';
-import { selectCurrentActivityTree } from '../store/features/groups/selectors/deck';
+import {
+  selectCurrentActivityTree,
+  selectCurrentActivityTreeAttemptState,
+} from '../store/features/groups/selectors/deck';
 import { selectPageSlug, selectPreviewMode, selectUserId } from '../store/features/page/slice';
 import { NotificationType } from './NotificationContext';
 
@@ -314,6 +317,23 @@ const ActivityRenderer: React.FC<ActivityRendererProps> = ({
   const lastCheckResults = useSelector(selectLastCheckResults);
   const [checkInProgress, setCheckInProgress] = useState(false);
   const historyModeNavigation = useSelector(selectHistoryNavigationActivity);
+  const currentActivityAttemptTree = useSelector(selectCurrentActivityTreeAttemptState);
+
+  useEffect(() => {
+    if (!currentActivityAttemptTree && !activity) {
+      return;
+    }
+    const attempt = currentActivityAttemptTree?.find((a) => a?.activityId === activity.resourceId);
+    const currentAttempt = sharedAttemptStateMap.get(activity.id);
+    if (attempt && currentAttempt !== attempt) {
+      sharedAttemptStateMap.set(activity.id, attempt);
+      AllAttemptStateList.push({
+        activityId: activity?.id,
+        attemptGuid: attempt.attemptGuid,
+        attempt: attempt,
+      });
+    }
+  }, [currentActivityAttemptTree]);
   useEffect(() => {
     if (!lastCheckTriggered || !ref.current) {
       return;

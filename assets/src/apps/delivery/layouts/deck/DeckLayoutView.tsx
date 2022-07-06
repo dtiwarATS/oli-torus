@@ -187,9 +187,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       console.log('REMOVING STATE VALUES: ', idsToBeRemoved); */
       if (idsToBeRemoved.length) {
         removeStateValues(defaultGlobalEnv, idsToBeRemoved);
-        const globalSnapshot = getEnvState(defaultGlobalEnv);
-        console.log({ globalSnapshot });
-
         await resetCurrentAttempt();
       }
     }
@@ -503,8 +500,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       const attempt = currentActivityAttemptTree?.find(
         (a) => a?.activityId === activity.resourceId,
       );
-
-      console.log({ attempt });
       if (!attempt) {
         console.error('could not find attempt state for ', activity);
         return;
