@@ -509,7 +509,20 @@ const ActivityRenderer: React.FC<ActivityRendererProps> = ({
         : null;
     const initState = currentActivity?.content?.custom?.facts || [];
     updateGlobalState(snapshot, initState);
-    const finalInitSnapshot = handleInitStateVars(initState, snapshot);
+    let finalInitSnapshot = handleInitStateVars(initState, snapshot);
+
+    const allInitState: any[] = [];
+    if (historyModeNavigation) {
+      //handle init state starting from parent screen
+      currentActivityTree?.forEach((currentActivity) => {
+        if (currentActivity?.content?.custom?.facts?.length) {
+          allInitState.push(...currentActivity?.content?.custom?.facts);
+        }
+      });
+
+      finalInitSnapshot = handleInitStateVars(allInitState, snapshot);
+    }
+
     ref.current.notify(NotificationType.CONTEXT_CHANGED, {
       currentActivityId,
       currentLessonId,
@@ -537,7 +550,7 @@ const ActivityRenderer: React.FC<ActivityRendererProps> = ({
     setLastInitPhaseHandledTimestamp(initPhaseComplete);
     // context change should only be needed for things loaded by parents that are still around
     /* console.log('AR notifyContextChanged', currentActivityId !== activity.id); */
-    if (!historyModeNavigation && currentActivityId !== activity.id) {
+    if (currentActivityId !== activity.id) {
       notifyContextChanged();
     }
   }, [
