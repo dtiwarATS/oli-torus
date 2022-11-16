@@ -15,18 +15,8 @@ import { getJanusCAPIRequestTypeString, JanusCAPIRequestTypes } from './JanusCAP
 import { CapiIframeModel } from './schema';
 
 const externalActivityMap: Map<string, any> = new Map();
+const userCacheStateKeys = ['observations', 'data'];
 let context = 'VIEWER';
-const getExternalActivityMap = () => {
-  const result: any = {};
-
-  externalActivityMap.forEach((value, key) => {
-    // TODO: cut out functions?
-    result[key] = value;
-  });
-
-  return result;
-};
-
 const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) => {
   const [state, setState] = useState<any[]>(Array.isArray(props.state) ? props.state : []);
   const [model, setModel] = useState<any>(Array.isArray(props.model) ? props.model : {});
@@ -615,11 +605,6 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       });
       if (hasDiff) {
         setInternalState(mutableState);
-        mutableState.forEach((element) => {
-          if (element.id.indexOf(`stage.${id}.`) === 0) {
-            externalActivityMap.set(`${simLife.ownerActivityId}|${element.id}`, element);
-          }
-        });
       }
     }
     return mutableState;
@@ -738,11 +723,13 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       if (!props.onGetData) {
         return;
       }
-      const val = await props.onGetData({ simId, key, id });
-      let value = val;
-      const exists = val !== undefined;
-      if (exists && typeof val !== 'string') {
-        value = JSON.stringify(val);
+      let value = externalActivityMap.get(`${id}|${key}`);
+      if (value === undefined || value === null) {
+        value = await props.onGetData({ simId, key, id });
+      }
+      const exists = value !== undefined;
+      if (exists && typeof value !== 'string') {
+        value = JSON.stringify(value);
       }
       response.values.responseType = 'success';
       response.values.value = value?.length ? value : '[]';
@@ -813,6 +800,9 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
         return;
       }
       const obj = value;
+      if (userCacheStateKeys.includes(key)) {
+        externalActivityMap.set(`${id}|${key}`, obj);
+      }
       await props.onSetData({ simId, key, value: obj, id });
       response.values.responseType = 'success';
       response.values.value = value;
