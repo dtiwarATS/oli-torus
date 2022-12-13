@@ -502,9 +502,19 @@ export const loadActivities = createAsyncThunk(
       const resumeId = snapshot['session.resume'];
       const currentResumeActivityAttempt = models.filter((model: any) => model.id === resumeId);
       if (currentResumeActivityAttempt?.length) {
+        const currentActivityAttempt = currentResumeActivityAttempt[0];
         states.forEach((state) => {
           if (state.attemptGuid === currentResumeActivityAttempt[0]?.attemptGuid) {
-            state.parts.forEach((part) => (part.response = []));
+            state.parts.forEach((part) => {
+              const isIFramePartComponent = currentActivityAttempt?.content?.partsLayout?.filter(
+                (customPart: any) =>
+                  customPart.id === part.partId && customPart.type === 'janus-capi-iframe',
+              );
+              //Reset the attempt for iFrame
+              if (isIFramePartComponent?.length) {
+                part.response = [];
+              }
+            });
           }
         });
       }
