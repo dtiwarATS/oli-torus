@@ -1,4 +1,9 @@
-import { evalAssignScript, getEnvState, getLocalizedStateSnapshot } from 'adaptivity/scripting';
+import {
+  defaultGlobalEnv,
+  evalAssignScript,
+  getEnvState,
+  getLocalizedStateSnapshot,
+} from 'adaptivity/scripting';
 import { EventEmitter } from 'events';
 import { Environment } from 'janus-script';
 import React, { useCallback, useEffect, useState } from 'react';
@@ -243,10 +248,15 @@ const Adaptive = (props: DeliveryElementProps<AdaptiveModelSchema>) => {
   );
 
   const handlePartInit = async (payload: { id: string | number; responses: any[] }) => {
-    /* console.log('onPartInit', payload); */
+    //console.log('onPartInit', payload);
     // a part should send initial state values
     if (payload.responses.length) {
-      const saveResults = await handlePartSave(payload);
+      const snapshot = getEnvState(defaultGlobalEnv);
+      const isResumeMode = snapshot['session.isResumeMode'];
+
+      if (!isResumeMode) {
+        const saveResults = await handlePartSave(payload);
+      }
       /* console.log('onPartInit saveResults', payload.id, saveResults); */
     }
 

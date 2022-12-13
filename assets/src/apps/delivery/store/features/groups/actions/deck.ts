@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import { CapiVariableTypes } from 'adaptivity/capi';
-import { templatizeText } from 'adaptivity/scripting';
+import { applyState, templatizeText } from 'adaptivity/scripting';
 import { handleValueExpression } from 'apps/delivery/layouts/deck/DeckLayoutFooter';
 import { ActivityState } from 'components/activities/types';
 import {
@@ -149,7 +149,11 @@ export const initializeActivity = createAsyncThunk(
       operator: '=',
       value: 0,
     };
-
+    const targetIsResumeModeOp: ApplyStateOperation = {
+      target: 'session.isResumeMode',
+      operator: '=',
+      value: false,
+    };
     const sessionOps = [
       resumeTarget,
       timeStartOp,
@@ -158,6 +162,7 @@ export const initializeActivity = createAsyncThunk(
       attemptNumberOp,
       targettedAttemptNumberOp,
       tutorialScoreOp,
+      targetIsResumeModeOp,
       // must come *after* the tutorial score op
       currentScoreOp,
     ];
@@ -498,13 +503,32 @@ export const loadActivities = createAsyncThunk(
     // when resuming a session, we want to reset the current part attempt values
     const shouldResume = states.some((attempt: any) => attempt.dateEvaluated !== null);
     if (shouldResume) {
+      const targetIsResumeModeOp: ApplyStateOperation = {
+        target: 'session.isResumeMode',
+        operator: '=',
+        value: true,
+      };
+      applyState(targetIsResumeModeOp, defaultGlobalEnv);
       const snapshot = getEnvState(defaultGlobalEnv);
+
+      const isResumeMode = snapshot['session.isResumeMode'];
+      console.log({ snapshot, isResumeMode });
       const resumeId = snapshot['session.resume'];
       const currentResumeActivityAttempt = models.filter((model: any) => model.id === resumeId);
       if (currentResumeActivityAttempt?.length) {
+        const currentActivityAttempt = currentResumeActivityAttempt[0];
         states.forEach((state) => {
           if (state.attemptGuid === currentResumeActivityAttempt[0]?.attemptGuid) {
-            state.parts.forEach((part) => (part.response = []));
+            state.parts.forEach((part) => {
+              const isIFramePartComponent = currentActivityAttempt?.content?.partsLayout?.filter(
+                (customPart: any) =>
+                  customPart.id === part.partId && customPart.type === 'janus-capi-iframe',
+              );
+              //Reset the attempt for iFrame parts only
+              if (isIFramePartComponent?.length) {
+                part.response = [];
+              }
+            });
           }
         });
       }
