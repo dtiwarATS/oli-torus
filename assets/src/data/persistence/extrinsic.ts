@@ -34,15 +34,16 @@ export function readGlobal(keys: string[] | null = null) {
 }
 
 export const readGlobalUserState = async (
-  keys: string[] | null = null,
+  topLevelKeys: string[] | null = null,
+  actualKey: string | null = null,
   useLocalStorage = false,
 ) => {
   let result: any = {};
   if (useLocalStorage) {
     // localStorage API doesn't support the "get all" behavior, so we need to put everything into a single object
     const storedUserState = JSON.parse(localStorage.getItem('torus.userState') || '{}');
-    if (keys) {
-      keys.forEach((key) => {
+    if (topLevelKeys) {
+      topLevelKeys.forEach((key) => {
         result[key] = storedUserState[key];
       });
     } else {
@@ -53,28 +54,34 @@ export const readGlobalUserState = async (
       await lastSet();
     }
     let refreshFromServer = false;
-    if (keys) {
+    if (topLevelKeys) {
       const cacheTimeThreshold = 300000;
-      const { timestamp: lastCacheTimeStamp } = userStateCache;
-      //If cache is not older than 5 min then lets fetch the data from cache
-      if (Date.now() - lastCacheTimeStamp < cacheTimeThreshold) {
-        keys.forEach((key) => {
-          const keyExists = userStateCache[key];
-          if (keyExists === undefined || keyExists === null) {
-            //if cache does not have any of the requested keys, we should make the server call
-            refreshFromServer = true;
+      topLevelKeys.forEach((key) => {
+        const keyExists = userStateCache[key];
+        if (keyExists && actualKey) {
+          const actualKeyRefreshTimeStamp =
+            userStateCache[`${key}`][`${actualKey}.refreshTimeStamp`];
+
+          //If cache is not older than 5 min then lets fetch the data from cache
+          if (Date.now() - actualKeyRefreshTimeStamp < cacheTimeThreshold) {
+            const keyExists = userStateCache[key];
+            if (keyExists === undefined || keyExists === null) {
+              //if cache does not have any of the requested keys, we should make the server call
+              refreshFromServer = true;
+            } else {
+              result[key] = userStateCache[key];
+            }
           }
-          result[key] = userStateCache[key];
-        });
-      } else {
-        refreshFromServer = true;
-      }
+        } else {
+          refreshFromServer = true;
+        }
+      });
     } else {
       result = userStateCache;
     }
     if (refreshFromServer) {
       //if cache does not have any of the requested keys, we should make the server call
-      const serverUserState = await readGlobal(keys);
+      const serverUserState = await readGlobal(topLevelKeys);
       // merge server state with result
       if ((serverUserState as any).type !== 'ServerError') {
         result = serverUserState;
@@ -92,6 +99,7 @@ const formatUserState = (updates: any, userSate: any) => {
       userSate[`${topKey}`] = {
         ...userSate[topKey],
         [actualKey]: updates[topKey][actualKey],
+        [`${actualKey}.refreshTimeStamp`]: Date.now(),
       };
     });
   });
@@ -103,7 +111,7 @@ export const internalUpdateGlobalUserState = async (
 ) => {
   /* console.log('updateGlobalUserState', updates); */
   const topLevelKeys = Object.keys(updates);
-  const currentState = await readGlobalUserState(topLevelKeys, useLocalStorage);
+  const currentState = await readGlobalUserState(topLevelKeys, null, useLocalStorage);
 
   const newState = { ...currentState };
   formatUserState(updates, newState);
@@ -134,7 +142,6 @@ export const updateGlobalUserState = async (
   /*console.log('updateGlobalUserState called', { updates, useLocalStorage });*/
 
   //Lets update the cache with latest changes.
-  userStateCache.timestamp = Date.now();
   formatUserState(updates, userStateCache);
 
   const result = await batchedUpdate(updates, useLocalStorage);

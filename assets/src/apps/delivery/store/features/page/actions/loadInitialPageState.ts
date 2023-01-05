@@ -64,7 +64,7 @@ export const loadInitialPageState = createAsyncThunk(
       /* console.log('INIT PAGE', params); */
       if (params.content.custom?.everApps) {
         const everAppIds = params.content.custom.everApps.map((everApp: any) => everApp.id);
-        const userState = await readGlobalUserState(everAppIds, params.previewMode);
+        const userState = await readGlobalUserState(everAppIds, null, params.previewMode);
         if (typeof userState === 'object') {
           const everAppState = Object.keys(userState).reduce((acc: any, key) => {
             const subState = userState[key];
