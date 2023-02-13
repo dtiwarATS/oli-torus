@@ -31,7 +31,8 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
              activity_id: nil,
              text_search: nil,
              page_id: nil,
-             graded: nil
+             graded: nil,
+             lifecycle_state: nil
            }
          ) do
       [] -> 0
@@ -79,6 +80,16 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
             resource_revision
           ],
           resource_revision.graded == ^options.graded
+        )
+      end
+
+    filter_by_status =
+      if is_nil(options.lifecycle_state) do
+        true
+      else
+        dynamic(
+          [aa, _resource_attempt, resource_access, _u, _activity_revision, _resource_revision],
+          aa.lifecycle_state == :evaluated
         )
       end
 
@@ -159,6 +170,7 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
         [aa, _resource_attempt, resource_access, _u, _activity_revision, _resource_revision],
         resource_access.section_id == ^section_id and aa.lifecycle_state == :submitted
       )
+      |> where(^filter_by_status)
       |> limit(^limit)
       |> offset(^offset)
       |> select([aa, _, _, _, _, _], aa)
@@ -172,6 +184,11 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
           page_id: resource_revision.resource_id,
           resource_attempt_number: resource_attempt.attempt_number,
           graded: resource_revision.graded,
+          lifecycle_state:
+            ^case status do
+              :submitted -> 1
+              :evaluated -> 0
+            end,
           user: user,
           revision: activity_revision,
           resource_attempt_guid: resource_attempt.attempt_guid,
@@ -232,13 +249,13 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
 
   @doc """
   Applies a collection of manual scores and feedbacks to the part attempts of a given activity attempt.
-
+  
   The activity attempt is assumed to be fully populated with virtual attributes delivered from the
   `browse_submitted_attempts` query from this module.
-
+  
   The `score_feedbacks_map` is a map of part attempt guids to `ScoreFeedback` structs that contain the
   instructor score, feedback, and the out_of value.
-
+  
   If this activity is the last activity remaining in a graded page, this will finalize that graded page attempt,
   recalculate a resource access level score, and trigger LMS grade passback (if this is an LMS section and that
   section has gradepassback enabled)

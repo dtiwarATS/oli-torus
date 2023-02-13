@@ -37,6 +37,11 @@ defmodule OliWeb.ManualGrading.TableModel do
           name: :graded,
           label: "Purpose",
           render_fn: &__MODULE__.render_purpose/3
+        },
+        %ColumnSpec{
+          name: :lifecycle_state,
+          label: "Status",
+          render_fn: &__MODULE__.render_status/3
         }
       ],
       event_suffix: "",
@@ -65,6 +70,14 @@ defmodule OliWeb.ManualGrading.TableModel do
       "Graded"
     else
       "Practice"
+    end
+  end
+
+  def render_status(_, row, _) do
+    if row.lifecycle_state == "submitted" do
+      "Submitted"
+    else
+      "Evaluated"
     end
   end
 

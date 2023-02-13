@@ -16,6 +16,8 @@ defmodule OliWeb.ManualGrading.Filters do
         label="Page" key={:page_id} active={is_active(assigns, :page_id)} clicked={"filters_changed"}/>
       <FilterButton selection={@selection} tooltip="Only show attempts of this same purpose"
         label="Purpose" key={:graded} active={is_active(assigns, :graded)} clicked={"filters_changed"}/>
+      <FilterButton selection={true} tooltip="Only show attempts that are evaluated"
+        label="Status" key={:lifecycle_state} active={is_active(assigns, :lifecycle_state)} clicked={"filters_changed"}/>
     </div>
     """
   end
@@ -26,19 +28,25 @@ defmodule OliWeb.ManualGrading.Filters do
     delegate_handle_event(event, params, socket, patch_fn)
   end
 
-  def delegate_handle_event("filters_changed", %{"key" => key, "active" => "false"}, socket, patch_fn) do
+  def delegate_handle_event(
+        "filters_changed",
+        %{"key" => key, "active" => "false"},
+        socket,
+        patch_fn
+      ) do
     changes = Map.put(%{}, String.to_existing_atom(key), nil)
     patch_fn.(socket, changes)
   end
 
   def delegate_handle_event("filters_changed", %{"key" => key}, socket, patch_fn) do
-
-    value = case key do
-      "user_id" -> socket.assigns.attempt.user.id
-      "activity_id" -> socket.assigns.attempt.resource_id
-      "page_id" -> socket.assigns.attempt.page_id
-      "graded" -> socket.assigns.attempt.graded
-    end
+    value =
+      case key do
+        "user_id" -> socket.assigns.attempt.user.id
+        "activity_id" -> socket.assigns.attempt.resource_id
+        "page_id" -> socket.assigns.attempt.page_id
+        "graded" -> socket.assigns.attempt.graded
+        "lifecycle_state" -> socket.assigns.attempt.lifecycle_state
+      end
 
     changes = Map.put(%{}, String.to_existing_atom(key), value)
     patch_fn.(socket, changes)
