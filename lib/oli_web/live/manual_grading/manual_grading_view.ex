@@ -183,7 +183,7 @@ defmodule OliWeb.ManualGrading.ManualGradingView do
       activity_id: get_int_param(params, "activity_id", nil),
       page_id: get_int_param(params, "page_id", nil),
       graded: get_boolean_param(params, "graded", nil),
-      lifecycle_state: get_int_param(params, "lifecycle_state", nil)
+      lifecycle_state: get_param(params, "lifecycle_state", "")
     }
 
     attempts =
@@ -243,7 +243,7 @@ defmodule OliWeb.ManualGrading.ManualGradingView do
       activity_id: get_int_param(params, "activity_id", nil),
       page_id: get_int_param(params, "page_id", nil),
       graded: get_boolean_param(params, "graded", nil),
-      lifecycle_state: get_int_param(params, "lifecycle_state", nil)
+      lifecycle_state: get_param(params, "lifecycle_state", "")
     }
 
     # This is an optimization, if the only thing that has changed is the selection
