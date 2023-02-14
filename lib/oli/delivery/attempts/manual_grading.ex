@@ -187,7 +187,8 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
           page_id: resource_revision.resource_id,
           resource_attempt_number: resource_attempt.attempt_number,
           graded: resource_revision.graded,
-          lifecycle_state: 0,
+          lifecycle_state:
+            fragment("CASE WHEN a0.lifecycle_state = 'submitted' THEN 1 ELSE 0 END "),
           user: user,
           revision: activity_revision,
           resource_attempt_guid: resource_attempt.attempt_guid,

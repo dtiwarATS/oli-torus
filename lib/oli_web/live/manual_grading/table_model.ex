@@ -74,7 +74,7 @@ defmodule OliWeb.ManualGrading.TableModel do
   end
 
   def render_status(_, row, _) do
-    if is_nil(row.lifecycle_state) or row.lifecycle_state == 0 do
+    if row.lifecycle_state == 1 do
       "Submitted"
     else
       "Evaluated"
