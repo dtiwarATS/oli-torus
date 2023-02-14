@@ -84,7 +84,7 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
       end
 
     filter_by_status =
-      if options.text_search == "" or is_nil(options.text_search) do
+      if is_nil(options.lifecycle_state) do
         dynamic(
           [aa, _resource_attempt, resource_access, _u, _activity_revision, _resource_revision],
           aa.lifecycle_state == :submitted
@@ -171,7 +171,7 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
       |> where(^filter_by_text)
       |> where(
         [aa, _resource_attempt, resource_access, _u, _activity_revision, _resource_revision],
-        resource_access.section_id == ^section_id and aa.lifecycle_state == :submitted
+        resource_access.section_id == ^section_id
       )
       |> where(^filter_by_status)
       |> limit(^limit)
@@ -187,7 +187,7 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
           page_id: resource_revision.resource_id,
           resource_attempt_number: resource_attempt.attempt_number,
           graded: resource_revision.graded,
-          lifecycle_state: aa.lifecycle_state,
+          lifecycle_state: 0,
           user: user,
           revision: activity_revision,
           resource_attempt_guid: resource_attempt.attempt_guid,

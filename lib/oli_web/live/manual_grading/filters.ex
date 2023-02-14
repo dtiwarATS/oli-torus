@@ -16,8 +16,8 @@ defmodule OliWeb.ManualGrading.Filters do
         label="Page" key={:page_id} active={is_active(assigns, :page_id)} clicked={"filters_changed"}/>
       <FilterButton selection={@selection} tooltip="Only show attempts of this same purpose"
         label="Purpose" key={:graded} active={is_active(assigns, :graded)} clicked={"filters_changed"}/>
-      <FilterButton selection={true} tooltip="Only show attempts that are evaluated"
-        label="Show graded reports" key={:lifecycle_state} clicked={"filters_changed"}/>
+      <FilterButton selection={@selection} tooltip="Only show attempts that are evaluated"
+        label="Show Graded Reports" key={:lifecycle_state} active={is_active(assigns, :lifecycle_state)}  clicked={"filters_changed"}/>
     </div>
     """
   end
