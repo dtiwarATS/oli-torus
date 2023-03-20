@@ -676,9 +676,6 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
   };
 
   const handleOnReady = (data: any) => {
-    if (simLife.ready) {
-      return;
-    }
     // should / will sim send onReady more than once??
     const filterVars = createCapiObjectFromStateVars(simLife.currentState, simLife.domain);
     if (filterVars && Object.keys(filterVars)?.length !== 0) {
@@ -707,6 +704,39 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
         }
         sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.VALUE_CHANGE, formatted);
       });
+    }
+    if (simLife.ready) {
+      //If it reaches here then it means that student have refreshed the iframe manually. We need to sent the init state as well as intial_check_complete event.
+      Object.keys(initState).forEach((key: any) => {
+        const formatted: Record<string, unknown> = {};
+        const baseKey = key.replace(`stage.${id}.`, '').replace(`app.${id}.`, '');
+        const value = initState[key];
+        const cVar = new CapiVariable({
+          key: baseKey,
+          value,
+          shouldConvertNumbers: false,
+        });
+        const typeOfValue = typeof value;
+        if (cVar.type === CapiVariableTypes.ARRAY) {
+          const isMultidimensional = cVar.value.filter(Array.isArray).length;
+          if (isMultidimensional && typeOfValue === 'string') {
+            const val: any[] = [];
+            //it's stage what we are doing here but CAPI expect a Multidimensional array [[0.5,1],[0.521]] as ['[0.5','1]','[0.5,'1]'], so we need to convert it to this format.
+            cVar.value.forEach((v: any) => {
+              val.push(...JSON.stringify(v).split(','));
+            });
+            cVar.value = val;
+          }
+        }
+        formatted[baseKey] = cVar;
+        if (
+          Object.keys(initStateBindToFacts).length < 0 ||
+          !Object.keys(initStateBindToFacts).includes(key)
+        ) {
+          sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.VALUE_CHANGE, formatted);
+        }
+      });
+      sendFormedResponse(simLife.handshake, {}, JanusCAPIRequestTypes.INITIAL_SETUP_COMPLETE, {});
     }
     //if there are no more facts/init state data then send INITIAL_SETUP_COMPLETE response to SIM
     if (!initState && !Object.keys(initState)?.length) {
