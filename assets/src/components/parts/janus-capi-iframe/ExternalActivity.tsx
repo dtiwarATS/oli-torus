@@ -706,7 +706,9 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       });
     }
     if (simLife.ready) {
-      //If it reaches here then it means that student have refreshed the iframe manually. We need to sent the init state as well as intial_check_complete event.
+      //If it reaches here then it means the SIM was already rendered on the screen but it might not have loaded correctly
+      //so instruction were given to student to reload the iframe manually which they did from browser.
+      //We need to sent the init state as well as intial_check_complete event.
       Object.keys(initState).forEach((key: any) => {
         const formatted: Record<string, unknown> = {};
         const baseKey = key.replace(`stage.${id}.`, '').replace(`app.${id}.`, '');
