@@ -45,6 +45,9 @@ $font-family-sans-serif: var(--font-sans);
   // &.startup {
   //   opacity: 1;
   // }
+  .aa-panel.left-panel {
+    overflow: hidden;
+  }
   .aa-panel,
   .aa-header-nav {
     position: fixed;
@@ -472,6 +475,10 @@ $font-family-sans-serif: var(--font-sans);
       top: -48px;
       position: relative;
     }
+  }
+  .aa-sequence-editor {
+    max-height: 60vh;
+    overflow-y: auto;
   }
   .aa-sequence-editor-menu {
     overflow-y: auto;
