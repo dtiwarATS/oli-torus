@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import { Accordion, Dropdown, ListGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { saveActivity } from 'apps/authoring/store/activities/actions/saveActivity';
@@ -519,6 +520,16 @@ const SequenceEditor: React.FC = () => {
     });
   }, [currentSequenceId, sequence]);
 
+  const onDragEnd = (result: any) => {
+    // dropped outside the list
+    console.log(result);
+  };
+
+  const getItemStyle = (isDragging: any) => ({
+    border: isDragging ? '2px solid #3B76D3' : 'none',
+    borderRadius: '5px',
+  });
+
   const getHierarchyList = (items: any, isParentQB = false) =>
     items.map(
       (
@@ -528,76 +539,101 @@ const SequenceEditor: React.FC = () => {
       ) => {
         const title = item.custom?.sequenceName || item.activitySlug;
         return (
-          <Accordion key={`${index}`}>
-            <ListGroup.Item
-              as="li"
-              className={`aa-sequence-item${item.children.length ? ' is-parent' : ''}`}
-              key={`${item.custom.sequenceId}`}
-              active={item.custom.sequenceId === currentSequenceId}
-              onClick={(e) => !(e as any).isContextButtonClick && handleItemClick(e, item)}
-              tabIndex={0}
-            >
-              <div className="aa-sequence-details-wrapper">
-                <div className="details">
+          <Draggable key={index} draggableId={item.custom.sequenceId} index={index}>
+            {(provided, snapshot) => (
+              <Accordion key={`${index}`} ref={provided.innerRef} {...provided.draggableProps}>
+                <ListGroup.Item
+                  as="li"
+                  style={getItemStyle(snapshot.isDragging)}
+                  className={`aa-sequence-item${item.children.length ? ' is-parent' : ''}`}
+                  key={`${item.custom.sequenceId}`}
+                  active={item.custom.sequenceId === currentSequenceId}
+                  onClick={(e) => !(e as any).isContextButtonClick && handleItemClick(e, item)}
+                  tabIndex={0}
+                  {...provided.dragHandleProps}
+                >
+                  <div className="aa-sequence-details-wrapper">
+                    <div className="details">
+                      {item.children.length ? (
+                        <ContextAwareToggle
+                          eventKey={`toggle_${item.custom.sequenceId}`}
+                          className={`aa-sequence-item-toggle`}
+                        />
+                      ) : null}
+                      {!itemToRename ? (
+                        <span className="title" title={item.custom.sequenceId}>
+                          {title}
+                        </span>
+                      ) : itemToRename.custom.sequenceId !== item.custom.sequenceId ? (
+                        <span className="title">{title}</span>
+                      ) : null}
+                      {itemToRename && itemToRename?.custom.sequenceId === item.custom.sequenceId && (
+                        <input
+                          ref={inputToFocus}
+                          className="form-control form-control-sm rename-sequence-input"
+                          type="text"
+                          placeholder={item.custom.isLayer ? 'Layer name' : 'Screen name'}
+                          value={itemToRename.custom.sequenceName}
+                          onClick={(e) => e.preventDefault()}
+                          onChange={(e) =>
+                            setItemToRename({
+                              ...itemToRename,
+                              custom: { ...itemToRename.custom, sequenceName: e.target.value },
+                            })
+                          }
+                          onFocus={(e) => e.target.select()}
+                          onBlur={() => handleRenameItem(item)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameItem(item);
+                            if (e.key === 'Escape') setItemToRename(undefined);
+                          }}
+                        />
+                      )}
+                      {item.custom.isLayer && (
+                        <i className="fas fa-layer-group ml-2 align-middle aa-isLayer" />
+                      )}
+                      {item.custom.isBank && (
+                        <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />
+                      )}
+                    </div>
+                    <SequenceItemContextMenu
+                      id={item.activitySlug}
+                      item={item}
+                      index={index}
+                      arr={arr}
+                      isParentQB={isParentQB}
+                    />
+                  </div>
                   {item.children.length ? (
-                    <ContextAwareToggle
-                      eventKey={`toggle_${item.custom.sequenceId}`}
-                      className={`aa-sequence-item-toggle`}
-                    />
+                    <Accordion.Collapse eventKey={`toggle_${item.custom.sequenceId}`}>
+                      <Droppable droppableId={item.custom.sequenceId} type={`droppableSubItem`}>
+                        {(provided, snapshot) => (
+                          <div ref={provided.innerRef}>
+                            <Draggable
+                              key={index}
+                              draggableId={item.custom.sequenceId}
+                              index={index}
+                            >
+                              {(provided, snapshot) => (
+                                <ListGroup
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  as="ol"
+                                  className="aa-sequence nested"
+                                >
+                                  {getHierarchyList(item.children, item.custom.isBank)}
+                                </ListGroup>
+                              )}
+                            </Draggable>
+                          </div>
+                        )}
+                      </Droppable>
+                    </Accordion.Collapse>
                   ) : null}
-                  {!itemToRename ? (
-                    <span className="title" title={item.custom.sequenceId}>
-                      {title}
-                    </span>
-                  ) : itemToRename.custom.sequenceId !== item.custom.sequenceId ? (
-                    <span className="title">{title}</span>
-                  ) : null}
-                  {itemToRename && itemToRename?.custom.sequenceId === item.custom.sequenceId && (
-                    <input
-                      ref={inputToFocus}
-                      className="form-control form-control-sm rename-sequence-input"
-                      type="text"
-                      placeholder={item.custom.isLayer ? 'Layer name' : 'Screen name'}
-                      value={itemToRename.custom.sequenceName}
-                      onClick={(e) => e.preventDefault()}
-                      onChange={(e) =>
-                        setItemToRename({
-                          ...itemToRename,
-                          custom: { ...itemToRename.custom, sequenceName: e.target.value },
-                        })
-                      }
-                      onFocus={(e) => e.target.select()}
-                      onBlur={() => handleRenameItem(item)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRenameItem(item);
-                        if (e.key === 'Escape') setItemToRename(undefined);
-                      }}
-                    />
-                  )}
-                  {item.custom.isLayer && (
-                    <i className="fas fa-layer-group ml-2 align-middle aa-isLayer" />
-                  )}
-                  {item.custom.isBank && (
-                    <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />
-                  )}
-                </div>
-                <SequenceItemContextMenu
-                  id={item.activitySlug}
-                  item={item}
-                  index={index}
-                  arr={arr}
-                  isParentQB={isParentQB}
-                />
-              </div>
-              {item.children.length ? (
-                <Accordion.Collapse eventKey={`toggle_${item.custom.sequenceId}`}>
-                  <ListGroup as="ol" className="aa-sequence nested">
-                    {getHierarchyList(item.children, item.custom.isBank)}
-                  </ListGroup>
-                </Accordion.Collapse>
-              ) : null}
-            </ListGroup.Item>
-          </Accordion>
+                </ListGroup.Item>
+              </Accordion>
+            )}
+          </Draggable>
         );
       },
     );
@@ -650,9 +686,15 @@ const SequenceEditor: React.FC = () => {
         </OverlayTrigger>
       </div>
       <Accordion.Collapse eventKey="0">
-        <ListGroup as="ol" className="aa-sequence">
-          {getHierarchyList(hierarchy)}
-        </ListGroup>
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="droppable" type="droppableItem">
+            {(provided, snapshot) => (
+              <ListGroup as="ol" ref={provided.innerRef} className="aa-sequence">
+                {getHierarchyList(hierarchy)}
+              </ListGroup>
+            )}
+          </Droppable>
+        </DragDropContext>
       </Accordion.Collapse>
       {showConfirmDelete && (
         <ConfirmDelete
