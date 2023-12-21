@@ -62,7 +62,14 @@ export const getExpressionStringForValue = (
     // if they key is not passed then it means that this function was called from the janu-text component so this logic will not apply
     // we need to process it with the old behaviour
     if (conditionsNeedEvaluations?.length && v.key) {
-      shouldEvaluateExpression = conditionsNeedEvaluations.includes(v.key);
+      const isSessionVariable = v.key.startsWith('session.');
+      const isVarVariable = v.key.startsWith('variables.');
+      const isEverAppVariable = v.key.startsWith('app.');
+      if (isSessionVariable || isVarVariable || isEverAppVariable) {
+        shouldEvaluateExpression = true;
+      } else {
+        shouldEvaluateExpression = conditionsNeedEvaluations.includes(v.key);
+      }
     }
   } catch (er) {
     console.warn('Error at getExpressionStringForValue for ', { key: v.key });
@@ -624,7 +631,14 @@ export const templatizeText = (
     // if they key is not passed then it means that this function was called from the janu-text component so this logic will not apply
     // we need to process it with the old behaviour
     if (conditionsNeedEvaluations?.length && key) {
-      shouldEvaluateExpression = conditionsNeedEvaluations.includes(key);
+      const isSessionVariable = key.startsWith('session.');
+      const isVarVariable = key.startsWith('variables.');
+      const isEverAppVariable = key.startsWith('app.');
+      if (isSessionVariable || isVarVariable || isEverAppVariable) {
+        shouldEvaluateExpression = true;
+      } else {
+        shouldEvaluateExpression = conditionsNeedEvaluations.includes(key);
+      }
     }
     if (!shouldEvaluateExpression) {
       return text;
