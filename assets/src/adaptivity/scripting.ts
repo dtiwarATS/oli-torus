@@ -64,8 +64,7 @@ export const getExpressionStringForValue = (
     if (conditionsNeedEvaluations?.length && v.key) {
       const isSessionVariable = v.key.startsWith('session.');
       const isVarVariable = v.key.startsWith('variables.');
-      const isEverAppVariable = v.key.startsWith('app.');
-      if (isSessionVariable || isVarVariable || isEverAppVariable) {
+      if (isSessionVariable || isVarVariable) {
         shouldEvaluateExpression = true;
       } else {
         shouldEvaluateExpression = conditionsNeedEvaluations.includes(v.key);
@@ -633,8 +632,7 @@ export const templatizeText = (
     if (conditionsNeedEvaluations?.length && key) {
       const isSessionVariable = key.startsWith('session.');
       const isVarVariable = key.startsWith('variables.');
-      const isEverAppVariable = key.startsWith('app.');
-      if (isSessionVariable || isVarVariable || isEverAppVariable) {
+      if (isSessionVariable || isVarVariable) {
         shouldEvaluateExpression = true;
       } else {
         shouldEvaluateExpression = conditionsNeedEvaluations.includes(key);
