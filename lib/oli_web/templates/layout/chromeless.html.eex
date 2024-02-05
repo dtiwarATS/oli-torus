@@ -38,10 +38,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/styles/default.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.5.0/highlight.min.js"></script>
 
-    <%= if @preview_mode == true do %>
     <!-- Preview Mode Styles -->
-      <link id="preview-theme-light" rel="stylesheet" href="/css/preview.css" />
-    <% end %>
+    <link id="preview-theme-light" rel="stylesheet" href="/css/preview.css" />
 
     <!-- Janus Part Component external CSS Files -->
     <link rel="stylesheet" href="/css/janus_image_carousel_delivery.css"/>
