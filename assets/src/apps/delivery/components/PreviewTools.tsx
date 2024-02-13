@@ -7,10 +7,12 @@ import {
   ApplyStateOperation,
   applyState,
   defaultGlobalEnv,
+  getEnvState,
   getValue,
 } from '../../../adaptivity/scripting';
 import { selectCurrentActivity } from '../store/features/activities/slice';
 import { navigateToActivity } from '../store/features/groups/actions/deck';
+import { selectReviewMode } from '../store/features/page/slice';
 import Adaptivity from './preview-tools/Adaptivity';
 import Inspector from './preview-tools/Inspector';
 import ScreenSelector from './preview-tools/ScreenSelector';
@@ -98,11 +100,33 @@ const PreviewTools: React.FC<PreviewToolsProps> = ({ model }) => {
   const [view, setView] = useState<string>('screens');
   const currentActivity = useSelector(selectCurrentActivity);
   const dispatch = useDispatch();
-  const sequence = model[0].children
+  const isReviewMode = useSelector(selectReviewMode);
+  let sequence = model[0].children
     ?.filter((child: any) => !child.custom.isLayer && !child.custom.isBank)
     .map((s: any) => {
       return { ...s.custom };
     });
+
+  if (isReviewMode) {
+    const snapshot = getEnvState(defaultGlobalEnv);
+
+    // Get the activities students visited
+    const globalSnapshot: any[] = Object.keys(snapshot)
+      .filter((key: string) => key.indexOf('session.visitTimestamps.') === 0)
+      ?.reverse()
+      .map((entry) => entry.split('.')[2]);
+
+    sequence = model[0].children
+      ?.filter(
+        (child: any) =>
+          !child.custom.isLayer &&
+          !child.custom.isBank &&
+          globalSnapshot.includes(child.custom.sequenceId),
+      )
+      .map((s: any) => {
+        return { ...s.custom };
+      });
+  }
 
   // Navigates to Activity
   const navigate = (activityId: any) => {
@@ -119,7 +143,7 @@ const PreviewTools: React.FC<PreviewToolsProps> = ({ model }) => {
       };
       applyState(targetVisitTimeStampOp, defaultGlobalEnv);
     }
-
+    console.log({ currentActivity });
     dispatch(navigateToActivity(activityId));
   };
 
