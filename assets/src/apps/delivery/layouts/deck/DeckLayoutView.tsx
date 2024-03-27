@@ -25,6 +25,7 @@ import { initializeActivity } from '../../store/features/groups/actions/deck';
 import {
   selectCurrentActivityTree,
   selectCurrentActivityTreeAttemptState,
+  selectSequence,
 } from '../../store/features/groups/selectors/deck';
 import {
   selectPageSlug,
@@ -61,6 +62,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
   const historyModeNavigation = useSelector(selectHistoryNavigationActivity);
   const reviewMode = useSelector(selectReviewMode);
   const isEnd = useSelector(selectLessonEnd);
+  const sequence = useSelector(selectSequence);
   const defaultClasses: any[] = useMemo(
     () => ['lesson-loaded', previewMode ? 'previewView' : 'lessonView'],
     [previewMode],
@@ -469,6 +471,47 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
   }, [dispatch]);
 
   const [localActivityTree, setLocalActivityTree] = useState<any>(currentActivityTree);
+  const [changeWindowsScrollPosition, setchangeWindowsScrollPosition] = useState(false);
+  const [scrollPosition, setScrollPosition] = useState(0);
+
+  useEffect(() => {
+    if (changeWindowsScrollPosition && currentActivityTree) {
+      const currentActivity = currentActivityTree[currentActivityTree.length - 1];
+      let previousActivity: any = null;
+      if (currentActivityTree.length > 1) {
+        previousActivity = currentActivityTree[currentActivityTree.length - 2];
+      }
+      const currentSequence = sequence?.filter(
+        (entry) => entry.custom.sequenceId === currentActivity.id,
+      );
+
+      const previousSquence = sequence?.filter(
+        (entry) => entry.custom.sequenceId === previousActivity?.id,
+      );
+
+      console.log("It's time to change the scroll position", {
+        scrollPosition,
+        scrol: window.scrollbars.visible,
+        sequence,
+        currentSequence,
+        previousSquence,
+        localActivityTree,
+      });
+    }
+  }, [currentActivityTree, changeWindowsScrollPosition, scrollPosition, sequence]);
+
+  const handleScroll = () => {
+    const position = window.scrollY;
+    setScrollPosition(position);
+  };
+
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   useEffect(() => {
     setLocalActivityTree((currentLocalTree: any) => {
@@ -493,8 +536,10 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       const currentLocalActivity = currentLocalTree[currentLocalTree.length - 1];
       // if the current and current local are the same, then we don't need to do anything
       if (currentLocalActivity.id === currentActivity.id) {
+        setchangeWindowsScrollPosition(false);
         return currentLocalTree;
       }
+      setchangeWindowsScrollPosition(true);
       return currentActivityTree.map((activity) => ({
         ...activity,
         activityKey: historyModeNavigation
