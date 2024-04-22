@@ -481,7 +481,7 @@ const LayoutEditor: React.FC<LayoutEditorProps> = (props) => {
             </button>
           )}
           {selectedPartAndCapabilities && selectedPartAndCapabilities.capabilities.copy && (
-            <button title="Copy" onClick={handleCopyComponent}>
+            <button accessKey="c" title="Copy" onClick={handleCopyComponent}>
               <i className="fas fa-copy"></i>
             </button>
           )}
@@ -499,7 +499,7 @@ const LayoutEditor: React.FC<LayoutEditorProps> = (props) => {
             </button>
           )}
           {selectedPartAndCapabilities && selectedPartAndCapabilities.capabilities.delete && (
-            <button title="Delete" onClick={() => setShowConfirmDelete(true)}>
+            <button accessKey="backspace" title="Delete" onClick={() => setShowConfirmDelete(true)}>
               <i className="fas fa-trash"></i>
             </button>
           )}

@@ -223,14 +223,24 @@ export const FlowchartHeaderNav: React.FC<HeaderNavProps> = () => {
       <div className="component-toolbar">
         <div className="toolbar-column" style={{ flexBasis: '10%', maxWidth: 50 }}>
           <label>Undo</label>
-          <button className="undo-redo-button" onClick={handleUndo} disabled={!hasUndo}>
+          <button
+            accessKey="Z"
+            className="undo-redo-button"
+            onClick={handleUndo}
+            disabled={!hasUndo}
+          >
             <UndoIcon />
           </button>
         </div>
 
         <div className="toolbar-column" style={{ flexBasis: '10%', maxWidth: 50 }}>
           <label>Redo</label>
-          <button className="undo-redo-button" onClick={handleRedo} disabled={!hasRedo}>
+          <button
+            accessKey="y"
+            className="undo-redo-button"
+            onClick={handleRedo}
+            disabled={!hasRedo}
+          >
             <RedoIcon />
           </button>
         </div>
@@ -301,7 +311,7 @@ export const FlowchartHeaderNav: React.FC<HeaderNavProps> = () => {
                   </Tooltip>
                 }
               >
-                <button className="component-button" onClick={handlePartPasteClick}>
+                <button accessKey="v" className="component-button" onClick={handlePartPasteClick}>
                   <PasteIcon size={18} color="#222439" />
                 </button>
               </OverlayTrigger>

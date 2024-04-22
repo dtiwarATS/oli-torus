@@ -160,7 +160,7 @@ const AddComponentToolbar: React.FC<{
             }
           >
             <span>
-              <button className="px-2 btn btn-link" onClick={handlePartPasteClick}>
+              <button accessKey="v" className="px-2 btn btn-link" onClick={handlePartPasteClick}>
                 <img src={`${imgsPath}/icons/icon-paste.svg`} width="30px"></img>
               </button>
             </span>

@@ -33,6 +33,7 @@ const UndoRedoToolbar: React.FC = () => {
         }
       >
         <button
+          accessKey="Z"
           className="px-2 btn btn-link"
           onClick={() => handleUndo()}
           disabled={!hasUndo}
@@ -51,6 +52,7 @@ const UndoRedoToolbar: React.FC = () => {
         }
       >
         <button
+          accessKey="y"
           className="px-2 btn btn-link"
           onClick={() => handleRedo()}
           disabled={!hasRedo}
