@@ -53,7 +53,7 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = ({
   const [ready, setReady] = useState<boolean>(false);
   const [inputNumberValue, setInputNumberValue] = useState<string | number>('');
   const [enabled, setEnabled] = useState(true);
-
+  const [currentActivityId, setcurrentActivityId] = useState<string>('');
   const {
     x,
     y,
@@ -188,8 +188,8 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = ({
             break;
           case NotificationType.CONTEXT_CHANGED:
             {
-              const { initStateFacts } = payload;
-
+              const { initStateFacts, currentActivityId } = payload;
+              setcurrentActivityId(currentActivityId);
               const sEnabled = initStateFacts[`stage.${id}.enabled`];
               if (sEnabled !== undefined) {
                 setEnabled(parseBool(sEnabled));
@@ -243,6 +243,7 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = ({
     (val: number) => {
       onSave({
         id: `${id}`,
+        currentActivityId,
         responses: [
           {
             key: 'value',
@@ -252,7 +253,7 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = ({
         ],
       });
     },
-    [id, onSave],
+    [id, onSave, currentActivityId],
   );
 
   const debouncetime = 300;
@@ -261,7 +262,7 @@ const InputNumber: React.FC<PartComponentProps<InputNumberModel>> = ({
     debounce((val) => {
       saveInputText(val);
     }, debouncetime),
-    [saveInputText],
+    [saveInputText, currentActivityId],
   );
 
   const handleOnChange: ReactEventHandler<HTMLInputElement> = (event) => {

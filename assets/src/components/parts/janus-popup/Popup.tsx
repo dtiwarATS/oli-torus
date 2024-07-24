@@ -24,7 +24,7 @@ const Popup: React.FC<PartComponentProps<PopupModel>> = (props) => {
   const [iconSrc, setIconSrc] = useState('');
   const [scriptEnv, setScriptEnv] = useState<any>();
   const [initSnapshot, setInitSnapshot] = useState<InitResultProps>();
-
+  const [activityId, setActivityId] = useState<string>('');
   const [activityHost, setActivityHost] = useState<any>(null);
   const handleStylingChanges = () => {
     const styleChanges: any = {};
@@ -166,13 +166,14 @@ const Popup: React.FC<PartComponentProps<PopupModel>> = (props) => {
             break;
           case NotificationType.CONTEXT_CHANGED:
             {
-              const { snapshot: changes } = payload;
-
+              const { snapshot: changes, currentActivityId } = payload;
+              setActivityId(currentActivityId);
               const isOpen: boolean | undefined = changes[`stage.${id}.isOpen`];
               if (isOpen !== undefined) {
                 setShowPopup(isOpen);
                 props.onSave({
                   id,
+                  currentActivityId,
                   responses: [
                     {
                       key: 'isOpen',
@@ -215,40 +216,48 @@ const Popup: React.FC<PartComponentProps<PopupModel>> = (props) => {
   };
 
   // Toggle popup open/close
-  const handleToggleIcon = (toggleVal: boolean) => {
-    setShowPopup(toggleVal);
-    if (toggleVal === false) {
-      // set focus on inputRef
-      if (inputRef.current) {
-        inputRef.current.focus();
+  const handleToggleIcon = useCallback(
+    (toggleVal: boolean) => {
+      setShowPopup(toggleVal);
+      if (toggleVal === false) {
+        // set focus on inputRef
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
       }
-    }
-    // optimistically write state
-    props.onSave({
-      id,
-      responses: [
-        {
-          key: 'isOpen',
-          type: CapiVariableTypes.BOOLEAN,
-          value: toggleVal,
-        },
-      ],
-    });
-  };
+      // optimistically write state
+      props.onSave({
+        id,
+        activityId,
+        responses: [
+          {
+            key: 'isOpen',
+            type: CapiVariableTypes.BOOLEAN,
+            value: toggleVal,
+          },
+        ],
+      });
+    },
+    [activityId],
+  );
 
-  const handleOnBlurToggleIcon = (toggleVal: boolean) => {
-    setShowPopup(toggleVal);
-    props.onSave({
-      id,
-      responses: [
-        {
-          key: 'isOpen',
-          type: CapiVariableTypes.BOOLEAN,
-          value: toggleVal,
-        },
-      ],
-    });
-  };
+  const handleOnBlurToggleIcon = useCallback(
+    (toggleVal: boolean) => {
+      setShowPopup(toggleVal);
+      props.onSave({
+        id,
+        activityId,
+        responses: [
+          {
+            key: 'isOpen',
+            type: CapiVariableTypes.BOOLEAN,
+            value: toggleVal,
+          },
+        ],
+      });
+    },
+    [activityId],
+  );
 
   const partComponents = popup?.partsLayout;
   const config = popup?.custom ? popup.custom : null;

@@ -102,6 +102,7 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
 
     const initResult = await props.onInit({
       id,
+      currentActivityId: simLife.handshake.config.questionId,
       responses: [
         {
           key: 'IFRAME_frameVisible',
@@ -397,7 +398,13 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       // should be of type CapiHandshake
       requestToken: '',
       authToken: `${guid()}_${props.id}`,
-      config: {},
+      config: {
+        context: '',
+        questionId: '',
+        sectionSlug: '',
+        lessonId: '',
+        userId: '',
+      },
     },
     init: false, // initial setup complete; this might be init state?
     ready: false,
@@ -777,13 +784,14 @@ const ExternalActivity: React.FC<PartComponentProps<CapiIframeModel>> = (props) 
       ({ id, responses }) => {
         props.onSave({
           id,
+          currentActivityId: simLife.handshake.config.questionId,
           responses,
         });
       },
       100,
       { maxWait: 30000, leading: true },
     ),
-    [],
+    [simLife],
   );
 
   const handleValueChange = (msgData: any, domain = 'stage') => {

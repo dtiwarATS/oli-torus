@@ -146,6 +146,7 @@ export function makeContent(
 export interface StudentResponse {
   input: any;
   files?: any;
+  currentActivityId?: string | number;
 }
 
 export type ModeSpecification = {

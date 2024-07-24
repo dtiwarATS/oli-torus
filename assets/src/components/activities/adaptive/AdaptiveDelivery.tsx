@@ -249,13 +249,18 @@ const Adaptive = (props: DeliveryElementProps<AdaptiveModelSchema>) => {
     [partsLayout, adaptivityDomain],
   );
 
-  const handlePartInit = async (payload: { id: string | number; responses: any[] }) => {
+  const handlePartInit = async (payload: {
+    id: string | number;
+    currentActivityId: string | number;
+    responses: any[];
+  }) => {
     /* console.log('onPartInit', payload); */
     // a part should send initial state values
     if (payload.responses.length) {
       const currentAttemptState = sharedAttemptStateMap.get(activityId);
       const partAttempt = currentAttemptState.parts.find((p: any) => p.partId === payload.id);
       const response: ActivityTypes.StudentResponse = {
+        currentActivityId: payload.currentActivityId,
         input: payload.responses.map((pr) => ({ ...pr, path: `${payload.id}.${pr.key}` })),
       };
       partInitResponseMap.set(partAttempt?.attemptGuid, response);
@@ -322,8 +327,15 @@ const Adaptive = (props: DeliveryElementProps<AdaptiveModelSchema>) => {
     }
   };
 
-  const handlePartSave = async ({ id, responses }: { id: string | number; responses: any[] }) => {
-    /* console.log('onPartSave', { id, responses }); */
+  const handlePartSave = async ({
+    id,
+    currentActivityId,
+    responses,
+  }: {
+    id: string | number;
+    currentActivityId: string | number;
+    responses: any[];
+  }) => {
     if (!responses || !responses.length) {
       // TODO: throw? no reason to save something with no response
       console.warn(`[onPartSave: ${id}] called with no responses`);
@@ -338,6 +350,7 @@ const Adaptive = (props: DeliveryElementProps<AdaptiveModelSchema>) => {
       return;
     }
     const response: ActivityTypes.StudentResponse = {
+      currentActivityId,
       input: responses.map((pr) => ({ ...pr, path: `${id}.${pr.key}` })),
     };
     if (props.onSavePart && !isReviewMode) {

@@ -15,24 +15,28 @@ const InputText: React.FC<PartComponentProps<InputTextModel>> = (props) => {
   const [model, setModel] = useState<any>(typeof props.model === 'object' ? props.model : {});
   const [ready, setReady] = useState<boolean>(false);
   const id: string = props.id;
-
+  const [currentActivityId, setcurrentActivityId] = useState<string>('');
   const [enabled, setEnabled] = useState(true);
   const [_cssClass, setCssClass] = useState('');
   const [text, setText] = useState<string>('');
 
   //need to save the textLength
-  const saveTextLength = (sText: string) => {
-    props.onSave({
-      id,
-      responses: [
-        {
-          key: 'textLength',
-          type: CapiVariableTypes.NUMBER,
-          value: sText.length,
-        },
-      ],
-    });
-  };
+  const saveTextLength = useCallback(
+    (sText: string) => {
+      props.onSave({
+        id,
+        currentActivityId,
+        responses: [
+          {
+            key: 'textLength',
+            type: CapiVariableTypes.NUMBER,
+            value: sText.length,
+          },
+        ],
+      });
+    },
+    [currentActivityId],
+  );
   const initialize = useCallback(async (pModel) => {
     // set defaults
     const dEnabled = typeof pModel.enabled === 'boolean' ? pModel.enabled : enabled;
@@ -132,7 +136,8 @@ const InputText: React.FC<PartComponentProps<InputTextModel>> = (props) => {
             break;
           case NotificationType.CONTEXT_CHANGED:
             {
-              const { initStateFacts } = payload;
+              const { initStateFacts, currentActivityId } = payload;
+              setcurrentActivityId(currentActivityId);
               const sEnabled = initStateFacts[`stage.${id}.enabled`];
               if (sEnabled !== undefined) {
                 setEnabled(parseBool(sEnabled));
@@ -217,24 +222,27 @@ const InputText: React.FC<PartComponentProps<InputTextModel>> = (props) => {
 
     props.onResize({ id: `${id}`, settings: styleChanges });
   }, [width, height]);
-  const saveInputText = (val: string) => {
-    props.onSave({
-      id,
-      responses: [
-        {
-          key: 'text',
-          type: CapiVariableTypes.STRING,
-          value: val,
-        },
-        {
-          key: 'textLength',
-          type: CapiVariableTypes.NUMBER,
-          value: val.length,
-        },
-      ],
-    });
-  };
-
+  const saveInputText = useCallback(
+    (val: string) => {
+      props.onSave({
+        id,
+        currentActivityId,
+        responses: [
+          {
+            key: 'text',
+            type: CapiVariableTypes.STRING,
+            value: val,
+          },
+          {
+            key: 'textLength',
+            type: CapiVariableTypes.NUMBER,
+            value: val.length,
+          },
+        ],
+      });
+    },
+    [currentActivityId],
+  );
   const handleOnChange: ReactEventHandler<HTMLInputElement> = (event) => {
     const el = event.target as HTMLInputElement;
     const val = el.value;
@@ -246,7 +254,7 @@ const InputText: React.FC<PartComponentProps<InputTextModel>> = (props) => {
   const debounceWaitTime = 250;
   const debounceInputText = useCallback(
     debounce((val) => saveInputText(val), debounceWaitTime),
-    [],
+    [currentActivityId],
   );
 
   return ready ? (
