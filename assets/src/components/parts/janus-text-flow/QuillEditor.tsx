@@ -96,7 +96,13 @@ const customHandlers = {
     const range = this.quill.getSelection();
     const expression = prompt('Enter the image URL', '');
     if (expression) {
-      this.quill.insertEmbed(range.index, 'image', expression);
+      const altTextExpression = prompt('Enter the Alt text for the image URL', '');
+      const img = document.createElement('img');
+      img.src = expression;
+      img.alt = altTextExpression || '';
+      // quill.insertEmbed does not allow inserting any additional attributes hence using dangerouslyPasteHTML function to set the Alt text
+      // This code only gets executed when user tries to add a Image in MCQ Options.
+      this.quill.clipboard.dangerouslyPasteHTML(range.index, img.outerHTML);
     }
   },
 };
