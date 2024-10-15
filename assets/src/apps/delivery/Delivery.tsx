@@ -47,6 +47,7 @@ export interface DeliveryProps {
   currentServerTime?: number;
   effectiveEndTime?: number;
   lateSubmit?: 'allow' | 'disallow';
+  attemptType?: string;
 }
 
 const Delivery: React.FC<DeliveryProps> = ({
@@ -73,6 +74,7 @@ const Delivery: React.FC<DeliveryProps> = ({
   currentServerTime = 0,
   effectiveEndTime = 0,
   lateSubmit = 'allow',
+  attemptType = '',
 }) => {
   const dispatch = useDispatch();
   const currentGroup = useSelector(selectCurrentGroup);
@@ -164,6 +166,7 @@ const Delivery: React.FC<DeliveryProps> = ({
         finalizeGradedURL,
         screenIdleTimeOutInSeconds,
         reviewMode,
+        attemptType,
       }),
     );
   };

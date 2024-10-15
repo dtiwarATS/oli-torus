@@ -489,9 +489,17 @@ export const getLocalizedStateSnapshot = (
   activityIds: EntityId[],
   env: Environment = defaultGlobalEnv,
 ) => {
+  let localActivityIds = activityIds;
   const snapshot = getEnvState(env);
   const finalState: any = { ...snapshot };
-  activityIds.forEach((activityId: string) => {
+  const attempType = getValue('session.attempType', defaultGlobalEnv);
+  //With new approach, we no longer save the part values to its owner, they are saved in the current activity attempt
+  // hence we only need the snapshot of current activity. So, if and older attempt is being viewed in review / history mode
+  // we don't do anything
+  if (attempType == 'New') {
+    localActivityIds = [activityIds[activityIds.length - 1]];
+  }
+  localActivityIds.forEach((activityId: string) => {
     const activityState = Object.keys(snapshot)
       .filter((key) => key.indexOf(`${activityId}|stage.`) === 0)
       .reduce((collect: any, key) => {

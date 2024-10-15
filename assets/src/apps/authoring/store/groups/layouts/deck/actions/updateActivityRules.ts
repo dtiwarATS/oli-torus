@@ -15,6 +15,7 @@ import {
 } from 'apps/authoring/components/AdaptivityEditor/AdaptiveItemOptions';
 import {
   findInSequence,
+  findInSequenceByResourceId,
   getSequenceLineage,
 } from 'apps/delivery/store/features/groups/actions/sequence';
 import { BulkActivityUpdate, bulkEdit } from 'data/persistence/activity';
@@ -193,7 +194,21 @@ export const updateActivityRules = createAsyncThunk(
               (part: any) => part.id === componentId,
             );
             if (partDef && partDef.inherited) {
-              referencedSequenceIds.push(partDef.owner);
+              const findCurrentActivityInSequence = findInSequenceByResourceId(
+                deck.children,
+                childActivity?.resourceId || -1,
+              );
+              const findOwnerActivityInSequence = findInSequence(deck.children, partDef.owner);
+              //With new approach, we no longer save the part values to its owner, they are saved in the current activity attempt
+              // hence on need to find its owner. We can directly add the current activity.
+              if (
+                findOwnerActivityInSequence?.custom.isLayer &&
+                findCurrentActivityInSequence?.custom.sequenceId
+              ) {
+                referencedSequenceIds.push(findCurrentActivityInSequence?.custom.sequenceId);
+              } else {
+                referencedSequenceIds.push(partDef.owner);
+              }
             }
           }
         });

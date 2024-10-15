@@ -20,7 +20,7 @@ import {
   selectLessonEnd,
   setInitPhaseComplete,
 } from '../../store/features/adaptivity/slice';
-import { savePartState, savePartStateToTree } from '../../store/features/attempt/actions/savePart';
+import { savePartState } from '../../store/features/attempt/actions/savePart';
 import { initializeActivity } from '../../store/features/groups/actions/deck';
 import {
   selectCurrentActivityTree,
@@ -28,6 +28,7 @@ import {
   selectSequence,
 } from '../../store/features/groups/selectors/deck';
 import {
+  selectAttemptType,
   selectPageSlug,
   selectReviewMode,
   selectSectionSlug,
@@ -63,6 +64,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
   const reviewMode = useSelector(selectReviewMode);
   const isEnd = useSelector(selectLessonEnd);
   const sequence = useSelector(selectSequence);
+  const currentAttemptType = useSelector(selectAttemptType);
   const defaultClasses: any[] = useMemo(
     () => ['lesson-loaded', previewMode ? 'previewView' : 'lessonView'],
     [previewMode],
@@ -314,6 +316,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
             currentActivity: currentActivityTree[currentActivityTree.length - 1].id,
             mode: historyModeNavigation || reviewMode ? contexts.REVIEW : contexts.VIEWER,
           },
+          currentAttemptType,
         };
 
         console.log('DECK HANDLE READY (ALL ACTIVITIES DONE INIT)', { context });
@@ -332,6 +335,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       historyModeNavigation,
       reviewMode,
       initCurrentActivity,
+      currentAttemptType,
     ],
   );
 
@@ -355,20 +359,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     return true;
   };
 
-  const getStatePrefix = (path: string, activityId: string | number) => {
-    const parts = path.split('.');
-    const partId = parts[0];
-
-    const ownerActivity = currentActivityTree?.find(
-      (activity) => !!(activity.content?.partsLayout || []).find((p: any) => p.id === partId),
-    );
-    if (ownerActivity) {
-      return `${ownerActivity.id}|stage`;
-    } else {
-      return `${activityId}|stage`;
-    }
-  };
-
   const handleActivitySavePart = useCallback(
     async (
       activityId: string | number,
@@ -376,20 +366,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       partAttemptGuid: string,
       response: StudentResponse,
     ) => {
-      /* console.log('DECK HANDLE SAVE PART', {
-      activityId,
-      attemptGuid,
-      partAttemptGuid,
-      response,
-      currentActivityTree,
-    }); */
-      let statePrefix = `${activityId}|stage`;
-      if (response.input?.length) {
-        // Even if the current screen is a child screen, we always save the part component properties with their owner activity Id i.e. ownerActivityId|stage.iframe.visible = true.
-        // The entire response is from one part, so the path (i.e. partId.properyName) will be same for all input response
-        // Hence we check the owner activity id once.
-        statePrefix = getStatePrefix(response.input[0].path, activityId);
-      }
+      const statePrefix = `${activityId}|stage`;
       const responseMap = response.input.reduce(
         (result: { [x: string]: any }, item: { key: string; path: string }) => {
           result[item.key] = { ...item, path: `${statePrefix}.${item.path}` };
@@ -406,36 +383,23 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
 
       //if user navigated from history, don't save anything and just return the saved state
       if (historyModeNavigation || reviewMode) {
-        return { result: null, snapshot: getLocalizedStateSnapshot(currentActivityIds) };
+        return {
+          result: null,
+          snapshot: getLocalizedStateSnapshot(currentActivityIds),
+          currentAttemptType,
+        };
       }
 
       if (response?.input?.length) {
-        let result;
-        // in addition to the current part attempt, need to lookup in the tree
-        // if this part is an inherited part and also write to the child attempt records
-        const currentActivity = currentActivityTree[currentActivityTree.length - 1];
-        if (currentActivity.id !== activityId) {
-          // this means that the part is inherted (we are a layer or parent screen)
-          // so we need to update all children in the tree with this part response as well
-          result = await dispatch(
-            savePartStateToTree({
-              attemptGuid,
-              partAttemptGuid,
-              response: responseMap,
-              activityTree: currentActivityTree,
-            }),
-          );
-        } else {
-          result = await dispatch(
-            savePartState({ attemptGuid, partAttemptGuid, response: responseMap }),
-          );
-        }
+        const result = await dispatch(
+          savePartState({ attemptGuid, partAttemptGuid, response: responseMap }),
+        );
         return { result, snapshot: getLocalizedStateSnapshot(currentActivityIds) };
       } else {
         return { result: null, snapshot: getLocalizedStateSnapshot(currentActivityIds) };
       }
     },
-    [currentActivityTree, dispatch, historyModeNavigation, reviewMode],
+    [currentActivityTree, dispatch, historyModeNavigation, reviewMode, currentAttemptType],
   );
 
   const handleActivitySubmitPart = useCallback(
@@ -517,9 +481,17 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       if (!currentActivityTree) {
         return null;
       }
-
-      const currentActivity = currentActivityTree[currentActivityTree.length - 1];
-
+      if (reviewMode) {
+        // currentActivityTree always contains a parent at the top and then it's subscreens. Since the data of each attempt is saved at the current
+        // activity level instead of part owner, during the review mode, we need to reverse the currentActivityTree so that when activity renders
+        // it takes the attempt data from the current activity instead of the part owner. We had to do this because of the way React render / references
+        // variables
+        currentActivityTree.reverse();
+      }
+      let currentActivity = currentActivityTree[currentActivityTree.length - 1];
+      if (reviewMode) {
+        currentActivity = currentActivityTree[0];
+      }
       if (!currentLocalTree) {
         return currentActivityTree
           ? currentActivityTree.map((activity) => ({
@@ -534,16 +506,17 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
 
       const currentLocalActivity = currentLocalTree[currentLocalTree.length - 1];
       // if the current and current local are the same, then we don't need to do anything
-      if (currentLocalActivity.id === currentActivity.id) {
+      if (currentLocalActivity.id === currentActivity.id && !reviewMode) {
         setTriggerWindowsScrollPosition(false);
         return currentLocalTree;
       }
       setTriggerWindowsScrollPosition(true);
       return currentActivityTree.map((activity) => ({
         ...activity,
-        activityKey: historyModeNavigation
-          ? `${activity.id}_${currentActivity.id}_history`
-          : activity.id,
+        activityKey:
+          historyModeNavigation || reviewMode
+            ? `${activity.id}_${currentActivity.id}_history`
+            : activity.id,
       }));
     });
   }, [currentActivityTree, historyModeNavigation, reviewMode]);

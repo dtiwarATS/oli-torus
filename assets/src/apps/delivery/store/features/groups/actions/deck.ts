@@ -203,14 +203,21 @@ export const initializeActivity = createAsyncThunk(
         (activity) => !!(activity.content?.partsLayout || []).find((p: any) => p.id === targetPart),
       );
       if (s.type === CapiVariableTypes.MATH_EXPR) {
-        return { ...s, target: `${ownerActivity!.id}|${s.target}` };
+        return {
+          ...s,
+          target: `${currentActivity?.id || ownerActivity?.id}|${s.target}`,
+        };
       }
 
       if (!ownerActivity) {
         // shouldn't happen, but ignore I guess
         return { ...s, value: modifiedValue };
       }
-      return { ...s, target: `${ownerActivity.id}|${s.target}`, value: modifiedValue };
+      return {
+        ...s,
+        target: `${currentActivity?.id || ownerActivity.id}|${s.target}`,
+        value: modifiedValue,
+      };
     });
 
     const stateOps = isHistoryMode ? globalizedInitState : [...sessionOps, ...globalizedInitState];
