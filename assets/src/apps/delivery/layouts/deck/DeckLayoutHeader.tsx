@@ -60,16 +60,20 @@ const DeckLayoutHeader: React.FC<DeckLayoutHeaderProps> = ({
     } else {
       // if no backUrl is provided, then set it to the section root url
       if (!backUrl) {
-        setBackButtonUrl(window.location.href.split('/adaptive_lesson')[0]);
+        if (isReviewMode) {
+          setBackButtonUrl(`/sections/${projectSlug}/instructor_dashboard/overview/students`);
+        } else {
+          setBackButtonUrl(window.location.href.split('/adaptive_lesson')[0]);
+        }
       }
 
-      setBackButtonText('Back');
+      setBackButtonText('Go back to previous screen');
     }
   }, [isPreviewMode]);
 
   return (
     <div className="headerContainer">
-      {!isReviewMode && (
+      {
         <div className="back-button">
           <style>
             {`
@@ -79,7 +83,7 @@ const DeckLayoutHeader: React.FC<DeckLayoutHeaderProps> = ({
             align-items: center;
             position: fixed;
             top: 0;
-            left: calc(50% - .65rem);
+            left:  ${isReviewMode ? 'calc(45% - .65rem)' : 'calc(50% - .65rem)'};
           }
           .back-button a {
             text-decoration: none;
@@ -101,11 +105,13 @@ const DeckLayoutHeader: React.FC<DeckLayoutHeaderProps> = ({
           </style>
           {currentPage.displayApplicationChrome || (
             <a href={backButtonUrl} title={backButtonText}>
-              <span className="fa fa-arrow-left">&nbsp;</span>
+              <span className={` ${isReviewMode ? 'fa fa-reply' : 'fa fa-arrow-left'}`}>
+                &nbsp;
+              </span>
             </a>
           )}
         </div>
-      )}
+      }
       {isReviewMode && <ReviewModeNavigation></ReviewModeNavigation>}
       <header id="delivery-header">
         <div className="defaultView">
