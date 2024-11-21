@@ -61,6 +61,7 @@ const DeckLayoutHeader: React.FC<DeckLayoutHeaderProps> = ({
       // if no backUrl is provided, then set it to the section root url
       if (!backUrl) {
         if (isReviewMode) {
+          //This is where we need to put the back URL for the review mode
           setBackButtonUrl(`/sections/${projectSlug}/instructor_dashboard/overview/students`);
         } else {
           setBackButtonUrl(window.location.href.split('/adaptive_lesson')[0]);
