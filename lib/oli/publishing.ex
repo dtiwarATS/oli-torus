@@ -27,6 +27,7 @@ defmodule Oli.Publishing do
   alias Oli.Groups
   alias Oli.Publishing.Publications.{Publication, PublicationDiff, PublicationDiffKey}
   alias Oli.Delivery.Updates
+  alias Oli.Delivery.Sections
 
   def distinct_slugs(publication_ids) do
     from(pr in PublishedResource,
@@ -702,8 +703,8 @@ defmodule Oli.Publishing do
 
     PublishedResource
     |> where([pr], pr.publication_id in ^publication_ids)
-    |> maybe_preload(preload)
     |> Repo.all()
+    |> Repo.preload(preload)
   end
 
   def get_published_resources_by_publication(publication_id, opts) do
@@ -788,14 +789,6 @@ defmodule Oli.Publishing do
 
   def get_published_pages_by_publication(publication_id, params) do
     get_published_pages_by_publication([publication_id], params)
-  end
-
-  defp maybe_preload(query, preload) do
-    Enum.reduce(preload, query, fn rel_table, acc_query ->
-      acc_query
-      |> join(:left, [pr, ...], rel in assoc(pr, ^rel_table))
-      |> preload([pr, ..., rel], [{^rel_table, rel}])
-    end)
   end
 
   @doc """
@@ -1292,6 +1285,8 @@ defmodule Oli.Publishing do
     {classification, {edition, major, minor}} =
       classify_version_change(changes, {edition, major, minor})
 
+    all_links = fetch_all_links(p2.id)
+
     %PublicationDiff{
       classification: classification,
       edition: edition,
@@ -1300,8 +1295,21 @@ defmodule Oli.Publishing do
       changes: changes,
       from_pub: p1,
       to_pub: p2,
+      all_links: all_links,
       created_at: DateTime.utc_now()
     }
+  end
+
+  defp fetch_all_links(publication_id) do
+    publication_ids = [publication_id]
+
+    [
+      Sections.get_all_page_links(publication_ids),
+      Sections.get_activity_references(publication_ids),
+      Sections.get_relates_to(publication_ids)
+    ]
+    |> Enum.reduce(MapSet.new(), fn links, acc -> MapSet.union(links, acc) end)
+    |> MapSet.to_list()
   end
 
   # classify the changes as either :major, :minor, or :no_changes and return the new version number

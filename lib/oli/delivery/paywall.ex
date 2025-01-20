@@ -32,7 +32,7 @@ defmodule Oli.Delivery.Paywall do
 
   def summarize_access(
         %User{id: id} = user,
-        %Section{slug: slug, requires_payment: true} = section
+        %Section{slug: slug, requires_payment: true, amount: amount} = section
       ) do
     if Sections.is_instructor?(user, slug) or Sections.is_admin?(user, slug) do
       AccessSummary.instructor()
@@ -45,19 +45,19 @@ defmodule Oli.Delivery.Paywall do
         if section.pay_by_institution do
           AccessSummary.pay_by_institution()
         else
-          case has_paid?(enrollment) do
-            true ->
+          if has_zero_cost?(amount) do
+            AccessSummary.has_zero_cost()
+          else
+            if has_paid?(enrollment) do
               AccessSummary.paid()
-
-            _ ->
-              case within_grace_period?(enrollment, section) do
-                true ->
-                  grace_period_seconds_remaining(enrollment, section)
-                  |> AccessSummary.within_grace()
-
-                _ ->
-                  AccessSummary.not_paid()
+            else
+              if within_grace_period?(enrollment, section) do
+                grace_period_seconds_remaining(enrollment, section)
+                |> AccessSummary.within_grace()
+              else
+                AccessSummary.not_paid()
               end
+            end
           end
         end
       end
@@ -69,7 +69,7 @@ defmodule Oli.Delivery.Paywall do
 
   def summarize_access(
         %User{} = user,
-        %Section{slug: slug, requires_payment: true} = section,
+        %Section{slug: slug, requires_payment: true, amount: amount} = section,
         user_role_id,
         enrollment,
         payment
@@ -90,13 +90,15 @@ defmodule Oli.Delivery.Paywall do
               AccessSummary.paid()
 
             _ ->
-              case within_grace_period?(enrollment, section) do
-                true ->
+              if has_zero_cost?(amount) do
+                AccessSummary.has_zero_cost()
+              else
+                if within_grace_period?(enrollment, section) do
                   grace_period_seconds_remaining(enrollment, section)
                   |> AccessSummary.within_grace()
-
-                _ ->
+                else
                   AccessSummary.not_paid()
+                end
               end
           end
         end
@@ -110,9 +112,8 @@ defmodule Oli.Delivery.Paywall do
     query =
       from(
         p in Payment,
-        where: p.enrollment_id == ^id,
-        limit: 1,
-        select: p
+        where: p.enrollment_id == ^id and p.type != :invalidated,
+        limit: 1
       )
 
     case Repo.all(query) do
@@ -120,6 +121,10 @@ defmodule Oli.Delivery.Paywall do
       _ -> true
     end
   end
+
+  defp has_zero_cost?(nil), do: true
+
+  defp has_zero_cost?(amount), do: Money.zero?(amount)
 
   defp within_grace_period?(nil, _), do: false
 
@@ -691,6 +696,30 @@ defmodule Oli.Delivery.Paywall do
   end
 
   @doc """
+  Gets the active payment for a given enrollment and section.
+  By active we mean a payment that has not been invalidated by an admin.
+
+  Example:
+  iex> get_active_payment_for(1, 2)
+  {:ok, %Payment{}}
+  iex> get_active_payment_for(1, 3)
+  {:error, :no_active_payment_found}
+  """
+  def get_active_payment_for(enrollment_id, section_id) do
+    from(
+      p in Payment,
+      where:
+        p.enrollment_id == ^enrollment_id and p.section_id == ^section_id and
+          p.type != :invalidated
+    )
+    |> Repo.one()
+    |> case do
+      nil -> {:error, :no_active_payment_found}
+      payment -> {:ok, payment}
+    end
+  end
+
+  @doc """
   Fetches and filters payment records based on various parameters.
 
   This function retrieves payment records, optionally filtering them based on product, paging, sorting, and text search criteria.
@@ -768,11 +797,15 @@ defmodule Oli.Delivery.Paywall do
                fragment(
                  """
                    CASE
-                     WHEN ? = 'deferred' THEN 1
-                     WHEN ? = 'direct' THEN 2
-                     ELSE 3
+                     WHEN ? = 'bypass' THEN 1
+                     WHEN ? = 'deferred' THEN 2
+                     WHEN ? = 'direct' THEN 3
+                     WHEN ? = 'invalidated' THEN 4
+                     ELSE 5
                    END
                  """,
+                 p.type,
+                 p.type,
                  p.type,
                  p.type
                )},

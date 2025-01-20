@@ -1,5 +1,6 @@
 defmodule OliWeb.Delivery.Student.IndexLiveTest do
   use ExUnit.Case, async: true
+
   use OliWeb.ConnCase
 
   import Phoenix.LiveViewTest
@@ -690,7 +691,7 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
         live(conn, ~p"/sections/#{section.slug}")
 
       assert redirect_path ==
-               "/?request_path=%2Fsections%2F#{section.slug}&section=#{section.slug}"
+               "/users/log_in"
     end
 
     test "can not access when not enrolled to course", context do
@@ -1027,15 +1028,40 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
              )
     end
 
-    test "can see the course progress", %{
+    test "can navigate to my assignments page from the homonymous component", %{
+      conn: conn,
+      section: section
+    } do
+      stub_current_time(~U[2024-05-01 20:00:00Z])
+      {:ok, view, _html} = live(conn, ~p"/sections/#{section.slug}")
+
+      assert has_element?(view, "div[role='my assignments'] a", "View All Assignments")
+
+      assert view
+             |> element("div[role='my assignments'] a", "View All Assignments")
+             |> render_click() ==
+               {:error,
+                {:live_redirect,
+                 %{
+                   kind: :push,
+                   to:
+                     "/sections/#{section.slug}/assignments?request_path=%2Fsections%2F#{section.slug}"
+                 }}}
+    end
+
+    test "can see the course progress details and navigate to the learn page", %{
       conn: conn,
       user: user,
       section: section,
       page_4: page_4,
+      page_5: page_5,
       mcq_1: mcq_1,
       project: project,
       publication: publication
     } do
+      # the progress for the course progress component is calculated in an "acid" way,
+      # where only 100% completed pages are considered for the progress calculation
+
       stub_current_time(~U[2024-05-01 20:00:00Z])
 
       set_activity_attempt(
@@ -1051,12 +1077,34 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
 
       set_progress(section.id, page_4.resource_id, user.id, 1.0, page_4)
 
+      # this page should not be considered for the progress calculation,
+      # since it's progress is 50%
+      set_progress(section.id, page_5.resource_id, user.id, 0.5, page_5)
+
       {:ok, view, _html} = live(conn, ~p"/sections/#{section.slug}")
 
-      # Shows course progress initial message
       assert has_element?(view, "div", "Course Progress")
+      assert has_element?(view, "a", "1/6 Pages Completed")
+      # 1/6 = 0.166666 => rounded to 17%
+      assert has_element?(view, "span", "17")
 
-      assert has_element?(view, "div", "17%")
+      # navigate to the learn page
+      assert view
+             |> element("a", "1/6 Pages Completed")
+             |> render_click() ==
+               {:error,
+                {:live_redirect,
+                 %{kind: :push, to: "/sections/#{section.slug}/learn?sidebar_expanded=true"}}}
+
+      # the student now completes page_5
+      # so we should see that page considered for the progress calculation
+      set_progress(section.id, page_5.resource_id, user.id, 1.0, page_5)
+
+      {:ok, view, _html} = live(conn, ~p"/sections/#{section.slug}")
+
+      assert has_element?(view, "a", "2/6 Pages Completed")
+      # 2/6 = 0.333333 => rounded to 33%
+      assert has_element?(view, "span", "33")
     end
 
     test "can see upcoming agenda if this option is enabled", %{
@@ -1067,10 +1115,6 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
       page_3: page_3,
       page_4: page_4
     } do
-      Sections.update_section(section, %{
-        agenda: true
-      })
-
       stub_current_time(~U[2023-11-03 21:00:00Z])
       {:ok, view, _html} = live(conn, ~p"/sections/#{section.slug}")
 
@@ -1087,6 +1131,10 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
       section: section,
       page_1: page_1
     } do
+      Sections.update_section(section, %{
+        agenda: false
+      })
+
       stub_current_time(~U[2023-11-03 21:00:00Z])
       {:ok, view, _html} = live(conn, ~p"/sections/#{section.slug}")
 
@@ -1505,6 +1553,91 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
              )
              |> render() =~
                ~s{href="/sections/#{section.slug}/lesson/#{page_3.slug}?request_path=%2Fsections%2F#{section.slug}"}
+    end
+
+    test "do not show assignments navigation if there are no assignments in section", %{
+      conn: conn,
+      user: user
+    } do
+      stub_current_time(~U[2023-11-03 00:00:00Z])
+
+      author = insert(:author)
+      project = insert(:project, authors: [author])
+
+      page_1_revision =
+        insert(:revision,
+          resource_type_id: ResourceType.get_id_by_type("page"),
+          title: "Start here",
+          graded: false
+        )
+
+      module_1_revision =
+        insert(:revision, %{
+          resource_type_id: Oli.Resources.ResourceType.get_id_by_type("container"),
+          children: [page_1_revision.resource_id],
+          title: "How to use this course"
+        })
+
+      unit_1_revision =
+        insert(:revision, %{
+          resource_type_id: Oli.Resources.ResourceType.get_id_by_type("container"),
+          children: [module_1_revision.resource_id],
+          title: "Introduction"
+        })
+
+      container_revision =
+        insert(:revision, %{
+          resource_type_id: Oli.Resources.ResourceType.get_id_by_type("container"),
+          children: [unit_1_revision.resource_id],
+          title: "Root Container"
+        })
+
+      all_revisions =
+        [
+          page_1_revision,
+          module_1_revision,
+          unit_1_revision,
+          container_revision
+        ]
+
+      # asociate resources to project
+      Enum.each(all_revisions, fn revision ->
+        insert(:project_resource, %{
+          project_id: project.id,
+          resource_id: revision.resource_id
+        })
+      end)
+
+      # publish project
+      publication =
+        insert(:publication, %{project: project, root_resource_id: container_revision.resource_id})
+
+      # publish resources
+      Enum.each(all_revisions, fn revision ->
+        insert(:published_resource, %{
+          publication: publication,
+          resource: revision.resource,
+          revision: revision,
+          author: author
+        })
+      end)
+
+      section =
+        insert(:section,
+          base_project: project,
+          title: "Another course!",
+          analytics_version: :v2
+        )
+
+      {:ok, section} = Sections.create_section_resources(section, publication)
+      {:ok, _} = Sections.rebuild_contained_pages(section)
+
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      {:ok, view, _html} = live(conn, ~p"/sections/#{section.slug}")
+
+      refute view |> element("#assignments_nav_link") |> has_element?()
     end
   end
 end

@@ -36,7 +36,6 @@ defmodule Oli.Delivery.Sections do
   alias Oli.Authoring.Course.{Project, ProjectAttributes}
   alias Oli.Delivery.Hierarchy
   alias Oli.Delivery.Hierarchy.HierarchyNode
-  alias Oli.Delivery.Snapshots.Snapshot
   alias Oli.Resources.ResourceType
   alias Oli.Publishing.DeliveryResolver
   alias Oli.Resources.Revision
@@ -57,7 +56,6 @@ defmodule Oli.Delivery.Sections do
   alias Oli.Delivery.Paywall
   alias Oli.Delivery.Sections.PostProcessing
   alias Oli.Branding.CustomLabels
-  alias Oli.Delivery.Settings
 
   require Logger
 
@@ -334,6 +332,20 @@ defmodule Oli.Delivery.Sections do
   end
 
   @doc """
+  Determines if a user is a platform (institution) administrator.
+  """
+  def is_institution_admin?(%User{} = user) do
+    PlatformRoles.has_roles?(
+      user,
+      [
+        PlatformRoles.get_role(:system_administrator),
+        PlatformRoles.get_role(:institution_administrator)
+      ],
+      :any
+    )
+  end
+
+  @doc """
   Enrolls a user or users in a course section
   ## Examples
       iex> enroll(user_id, section_id, [%ContextRole{}])
@@ -343,7 +355,9 @@ defmodule Oli.Delivery.Sections do
       {:error, changeset} # Something went wrong
   """
   @spec enroll(list(number()), number(), [%ContextRole{}]) :: {:ok, list(%Enrollment{})}
-  def enroll(user_ids, section_id, context_roles) when is_list(user_ids) do
+  def enroll(user_ids, section_id, context_roles, status \\ :enrolled)
+
+  def enroll(user_ids, section_id, context_roles, status) when is_list(user_ids) do
     Repo.transaction(fn ->
       context_roles = EctoProvider.Marshaler.to(context_roles)
       date = DateTime.utc_now() |> DateTime.truncate(:second)
@@ -357,7 +371,7 @@ defmodule Oli.Delivery.Sections do
             section_id: section_id,
             inserted_at: date,
             updated_at: date,
-            status: :enrolled,
+            status: status,
             state: %{}
           }
         )
@@ -386,7 +400,7 @@ defmodule Oli.Delivery.Sections do
   end
 
   @spec enroll(number(), number(), [%ContextRole{}]) :: {:ok, %Enrollment{}}
-  def enroll(user_id, section_id, context_roles) do
+  def enroll(user_id, section_id, context_roles, status) do
     context_roles = EctoProvider.Marshaler.to(context_roles)
 
     case Repo.one(
@@ -397,7 +411,7 @@ defmodule Oli.Delivery.Sections do
            )
          ) do
       # Enrollment doesn't exist, we are creating it
-      nil -> %Enrollment{user_id: user_id, section_id: section_id}
+      nil -> %Enrollment{user_id: user_id, section_id: section_id, status: status}
       # Enrollment exists, we are potentially just updating it
       e -> e
     end
@@ -538,24 +552,36 @@ defmodule Oli.Delivery.Sections do
   def has_student_data?(section_slug) do
     query =
       from(
-        snapshot in Snapshot,
-        join: s in assoc(snapshot, :section),
+        summary in Oli.Analytics.Summary.ResourceSummary,
+        join: s in Section,
+        on: summary.section_id == s.id,
         where: s.slug == ^section_slug,
-        select: snapshot
+        select: summary
       )
 
     Repo.aggregate(query, :count, :id) > 0
   end
 
-  def get_enrollment(section_slug, user_id) do
+  @doc """
+  Returns the enrollment for a given section and user.
+  The `filter_by_status` boolean option is used to filter the enrollment by status
+  (enrollment status = :enrolled and section status = :active).
+  """
+  def get_enrollment(section_slug, user_id, opts \\ [filter_by_status: true]) do
+    maybe_filter_by_status =
+      if opts[:filter_by_status] do
+        dynamic([e, s], e.status == :enrolled and s.status == :active)
+      else
+        true
+      end
+
     query =
       from(
         e in Enrollment,
         join: s in Section,
         on: e.section_id == s.id,
-        where:
-          e.user_id == ^user_id and s.slug == ^section_slug and s.status == :active and
-            e.status == :enrolled,
+        where: e.user_id == ^user_id and s.slug == ^section_slug,
+        where: ^maybe_filter_by_status,
         select: e
       )
 
@@ -569,7 +595,8 @@ defmodule Oli.Delivery.Sections do
   end
 
   @doc """
-  Returns a listing of all open and free sections for a given user.
+  Returns a listing of all open and free sections for a given user,
+  ordered by the most recently enrolled.
   """
   def list_user_open_and_free_sections(%{id: user_id} = _user) do
     query =
@@ -580,6 +607,7 @@ defmodule Oli.Delivery.Sections do
         where:
           e.user_id == ^user_id and s.open_and_free == true and s.status == :active and
             e.status == :enrolled,
+        order_by: [desc: e.inserted_at],
         select: s
       )
 
@@ -1237,7 +1265,7 @@ defmodule Oli.Delivery.Sections do
   # determine and return the list of page resource ids that are not reachable from that
   # hierarchy, taking into account links from pages to other pages and the 'relates_to'
   # relationship between pages.
-  defp determine_unreachable_pages(publication_ids, hierarchy_ids) do
+  def determine_unreachable_pages(publication_ids, hierarchy_ids, all_links \\ nil) do
     # Start with all pages
     unreachable =
       Oli.Publishing.all_page_resource_ids(publication_ids)
@@ -1249,13 +1277,19 @@ defmodule Oli.Delivery.Sections do
     # we want to be able to handle cases where a page from the hierarchy embeds an activity which
     # links to a page outside the hierarchy.
     all_links =
-      [
-        get_all_page_links(publication_ids),
-        get_activity_references(publication_ids),
-        get_relates_to(publication_ids)
-      ]
-      |> Enum.reduce(MapSet.new(), fn links, acc -> MapSet.union(links, acc) end)
-      |> MapSet.to_list()
+      case all_links do
+        nil ->
+          [
+            get_all_page_links(publication_ids),
+            get_activity_references(publication_ids),
+            get_relates_to(publication_ids)
+          ]
+          |> Enum.reduce(MapSet.new(), fn links, acc -> MapSet.union(links, acc) end)
+          |> MapSet.to_list()
+
+        _ ->
+          all_links
+      end
 
     link_map =
       Enum.reduce(all_links, %{}, fn {source, target}, map ->
@@ -1298,7 +1332,7 @@ defmodule Oli.Delivery.Sections do
 
   # Returns a mapset of two element tuples of the form {source_resource_id, target_resource_id}
   # representing all of the links between pages in the section
-  defp get_all_page_links(publication_ids) do
+  def get_all_page_links(publication_ids) do
     joined_publication_ids = Enum.join(publication_ids, ",")
 
     item_types =
@@ -1338,7 +1372,7 @@ defmodule Oli.Delivery.Sections do
 
   # Returns a mapset of two element tuples of the form {source_resource_id, target_resource_id}
   # representing the links of pages to activities
-  defp get_activity_references(publication_ids) do
+  def get_activity_references(publication_ids) do
     joined_publication_ids = Enum.join(publication_ids, ",")
 
     sql = """
@@ -1360,7 +1394,7 @@ defmodule Oli.Delivery.Sections do
 
   # Returns a mapset of two element tuples of the form {source_resource_id, target_resource_id}
   # representing the relates_to relationship between pages.
-  defp get_relates_to(publication_ids) do
+  def get_relates_to(publication_ids) do
     joined_publication_ids = Enum.join(publication_ids, ",")
     page_type_id = Oli.Resources.ResourceType.id_for_page()
 
@@ -1490,57 +1524,75 @@ defmodule Oli.Delivery.Sections do
   end
 
   @doc """
-  Fetches containers per page, grouping them by page ID, and orders the containers by their numbering level within each page for a given section.
+  Assembles containers per page, grouping them by page ID, and orders the containers by their numbering level within each page for a given section.
 
   ## Parameters
-    - `section_slug`: The slug of the section for which container data is fetched.
+    - `section`: The section for which container data is fetched.
 
   ## Returns
     - A list of maps containing page IDs and their associated containers, with containers sorted by numbering level.
 
   ## Examples
-      iex> get_ordered_containers_per_page("chemistry")
+      iex> get_ordered_containers_per_page(section)
       [%{page_id: 1, containers: [%{id: 10, title: "Introduction", numbering_level: 1}]}]
   """
+  def get_ordered_containers_per_page(section, page_ids \\ []) do
+    section =
+      case section.previous_next_index do
+        nil ->
+          {:ok, section} = Oli.Delivery.PreviousNextIndex.rebuild(section)
+          section
 
-  @spec get_ordered_containers_per_page(String.t(), list(integer())) :: [
-          %{page_id: integer(), containers: list(map())}
-        ]
-  def get_ordered_containers_per_page(section_slug, page_ids \\ []) do
-    container_type_id = Oli.Resources.ResourceType.get_id_by_type("container")
+        _ ->
+          section
+      end
 
-    pages_filter =
-      if Enum.empty?(page_ids),
-        do: true,
-        else: dynamic([_sr, _s, _spp, _pr, _rev, cp], cp.page_id in ^page_ids)
+    child_to_parent =
+      Map.values(section.previous_next_index)
+      |> Enum.reduce(%{}, fn item, map ->
+        Map.get(item, "children")
+        |> Enum.reduce(map, fn child, map ->
+          Map.put(map, child, Map.get(item, "id"))
+        end)
+      end)
 
-    from(
-      [sr: sr, rev: rev, s: s] in DeliveryResolver.section_resource_revisions(section_slug),
-      join: cp in ContainedPage,
-      on: cp.container_id == rev.resource_id,
-      where:
-        rev.deleted == false and s.slug == ^section_slug and
-          rev.resource_type_id == ^container_type_id,
-      where: ^pages_filter,
-      group_by: [cp.page_id],
-      select: %{
-        page_id: cp.page_id,
-        containers:
-          fragment(
-            """
-            array_agg(
-              json_build_object('id', ?, 'title', ?, 'numbering_level', ?)
-              ORDER BY ? ASC
-            )
-            """,
-            rev.resource_id,
-            rev.title,
-            sr.numbering_level,
-            sr.numbering_level
-          )
-      }
-    )
-    |> Repo.all()
+    all_pages =
+      Map.values(section.previous_next_index)
+      |> Enum.filter(fn item -> Map.get(item, "type") == "page" end)
+      |> Enum.map(fn item ->
+        page_id = Map.get(item, "id")
+        ancestors = build_ancestors(page_id, [], child_to_parent)
+
+        %{
+          page_id: String.to_integer(page_id),
+          containers:
+            Enum.map(ancestors, fn ancestor_id ->
+              a = Map.get(section.previous_next_index, ancestor_id)
+
+              %{
+                "id" => String.to_integer(ancestor_id),
+                "title" => a["title"],
+                "numbering_level" => a["level"] |> String.to_integer()
+              }
+            end)
+        }
+      end)
+
+    case page_ids do
+      [] ->
+        all_pages
+
+      _ ->
+        page_ids_mapset = MapSet.new(page_ids)
+        Enum.filter(all_pages, fn page -> Enum.member?(page_ids_mapset, page.page_id) end)
+    end
+  end
+
+  def build_ancestors(resource_id, entries, child_to_parent) do
+    case Map.get(child_to_parent, resource_id) do
+      nil -> entries
+      parent_id -> build_ancestors(parent_id, [parent_id | entries], child_to_parent)
+    end
   end
 
   defp section_publication_ids(section_slug) do
@@ -1760,7 +1812,7 @@ defmodule Oli.Delivery.Sections do
     |> Enum.filter(fn node ->
       node.revision.resource_type_id == ResourceType.get_id_by_type("container")
     end)
-    |> Enum.map(fn %HierarchyNode{resource_id: resource_id, section_resource: sr, revision: rev} ->
+    |> Enum.map(fn %HierarchyNode{resource_id: resource_id, revision: rev, section_resource: sr} ->
       {resource_id,
        label_for(sr.numbering_level, sr.numbering_index, rev.title, short_label, customizations)}
     end)
@@ -1787,12 +1839,69 @@ defmodule Oli.Delivery.Sections do
   This function is being used for the v1 and v2 versions of the schedule.
   In the short term when all views use the v2 version, the version param will be removed and v2 will prevale.
   """
-  def get_ordered_schedule(section, current_user_id, version \\ :v1)
+  def get_ordered_schedule(
+        section,
+        current_user_id,
+        combined_settings_for_all_resources,
+        version \\ :v1
+      )
 
-  def get_ordered_schedule(section, current_user_id, :v1) do
-    {containers_data_map, page_to_containers_map, progress_per_resource_id,
-     raw_avg_score_per_page_id, user_resource_attempt_counts, combined_settings_for_all_resources,
-     last_attempt_per_page_id} = build_user_data_for_section_schedule(section, current_user_id)
+  def get_ordered_schedule(section, current_user_id, combined_settings_for_all_resources, :v1) do
+    container_titles = container_titles(section)
+
+    combined_settings_for_all_resources =
+      case combined_settings_for_all_resources do
+        nil ->
+          Oli.Delivery.Settings.get_combined_settings_for_all_resources(
+            section.id,
+            current_user_id
+          )
+
+        _ ->
+          combined_settings_for_all_resources
+      end
+
+    containers_data_map =
+      get_ordered_container_labels(section.slug, short_label: true)
+      |> Enum.reduce(%{}, fn {container_id, label}, acc ->
+        Map.put(acc, container_id, %{label: label, title: container_titles[container_id]})
+      end)
+
+    page_to_containers_map =
+      get_ordered_containers_per_page(section)
+      |> Enum.reduce(%{}, fn elem, acc ->
+        Map.put(acc, elem[:page_id], elem[:containers])
+      end)
+
+    %{"container" => container_ids, "page" => page_ids} =
+      Sections.get_resource_ids_group_by_resource_type(section)
+
+    progress_per_container_id =
+      Metrics.progress_across(section.id, container_ids, current_user_id)
+      |> Enum.into(%{}, fn {container_id, progress} ->
+        {container_id, progress || 0.0}
+      end)
+
+    progress_per_page_id =
+      Metrics.progress_across_for_pages(section.id, page_ids, [current_user_id])
+
+    progress_per_resource_id =
+      Map.merge(progress_per_page_id, progress_per_container_id)
+      |> Map.filter(fn {_, progress} -> progress not in [nil, 0.0] end)
+
+    last_attempt_per_page_id =
+      get_last_attempt_per_page_id(section.slug, current_user_id)
+      |> Enum.into(%{})
+
+    raw_avg_score_per_page_id =
+      Metrics.raw_avg_score_across_for_pages(section, page_ids, [current_user_id])
+
+    user_resource_attempt_counts =
+      Metrics.get_all_user_resource_attempt_counts(section, current_user_id)
+
+    #      {containers_data_map, page_to_containers_map, progress_per_resource_id,
+    #     raw_avg_score_per_page_id, user_resource_attempt_counts, combined_settings_for_all_resources,
+    #     last_attempt_per_page_id} = build_user_data_for_section_schedule(section, current_user_id)
 
     scheduled_section_resources =
       Scheduling.retrieve(section, :pages)
@@ -1836,10 +1945,22 @@ defmodule Oli.Delivery.Sections do
     scheduled_section_resources
   end
 
-  def get_ordered_schedule(section, current_user_id, :v2) do
+  def get_ordered_schedule(section, current_user_id, combined_settings_for_all_resources, :v2) do
     {containers_data_map, page_to_containers_map, progress_per_resource_id,
-     raw_avg_score_per_page_id, user_resource_attempt_counts, combined_settings_for_all_resources,
+     raw_avg_score_per_page_id, user_resource_attempt_counts,
      last_attempt_per_page_id} = build_user_data_for_section_schedule(section, current_user_id)
+
+    combined_settings_for_all_resources =
+      case combined_settings_for_all_resources do
+        nil ->
+          Oli.Delivery.Settings.get_combined_settings_for_all_resources(
+            section.id,
+            current_user_id
+          )
+
+        _ ->
+          combined_settings_for_all_resources
+      end
 
     scheduled_section_resources =
       Scheduling.retrieve(section, :pages)
@@ -1890,10 +2011,26 @@ defmodule Oli.Delivery.Sections do
   and we need to respect the same expected output format as get_ordered_schedule/3.
   """
 
-  def get_not_scheduled_agenda(%Section{analytics_version: :v1} = section, current_user_id) do
+  def get_not_scheduled_agenda(
+        %Section{analytics_version: :v1} = section,
+        combined_settings_for_all_resources,
+        current_user_id
+      ) do
     {containers_data_map, page_to_containers_map, progress_per_resource_id,
-     raw_avg_score_per_page_id, user_resource_attempt_counts, combined_settings_for_all_resources,
+     raw_avg_score_per_page_id, user_resource_attempt_counts,
      last_attempt_per_page_id} = build_user_data_for_section_schedule(section, current_user_id)
+
+    combined_settings_for_all_resources =
+      case combined_settings_for_all_resources do
+        nil ->
+          Oli.Delivery.Settings.get_combined_settings_for_all_resources(
+            section.id,
+            current_user_id
+          )
+
+        _ ->
+          combined_settings_for_all_resources
+      end
 
     sorted_container_groups =
       Scheduling.retrieve(section, :pages)
@@ -1922,9 +2059,13 @@ defmodule Oli.Delivery.Sections do
     %{{nil, nil} => sorted_container_groups}
   end
 
-  def get_not_scheduled_agenda(%Section{analytics_version: :v2} = section, current_user_id) do
+  def get_not_scheduled_agenda(
+        %Section{analytics_version: :v2} = section,
+        combined_settings_for_all_resources,
+        current_user_id
+      ) do
     {containers_data_map, page_to_containers_map, progress_per_resource_id,
-     raw_avg_score_per_page_id, user_resource_attempt_counts, combined_settings_for_all_resources,
+     raw_avg_score_per_page_id, user_resource_attempt_counts,
      last_attempt_per_page_id} = build_user_data_for_section_schedule(section, current_user_id)
 
     sorted_container_groups =
@@ -1955,7 +2096,7 @@ defmodule Oli.Delivery.Sections do
   end
 
   defp build_user_data_for_section_schedule(section, current_user_id) do
-    container_titles = container_titles(section.slug)
+    container_titles = container_titles(section)
 
     containers_data_map =
       get_ordered_container_labels(section.slug, short_label: true)
@@ -1964,13 +2105,13 @@ defmodule Oli.Delivery.Sections do
       end)
 
     page_to_containers_map =
-      get_ordered_containers_per_page(section.slug)
+      get_ordered_containers_per_page(section)
       |> Enum.reduce(%{}, fn elem, acc ->
         Map.put(acc, elem[:page_id], elem[:containers])
       end)
 
     %{"container" => container_ids, "page" => page_ids} =
-      Sections.get_resource_ids_group_by_resource_type(section.slug)
+      Sections.get_resource_ids_group_by_resource_type(section)
 
     progress_per_container_id =
       Metrics.progress_across(section.id, container_ids, current_user_id)
@@ -1995,12 +2136,8 @@ defmodule Oli.Delivery.Sections do
     user_resource_attempt_counts =
       Metrics.get_all_user_resource_attempt_counts(section, current_user_id)
 
-    combined_settings_for_all_resources =
-      Settings.get_combined_settings_for_all_resources(section.id, current_user_id)
-
     {containers_data_map, page_to_containers_map, progress_per_resource_id,
-     raw_avg_score_per_page_id, user_resource_attempt_counts, combined_settings_for_all_resources,
-     last_attempt_per_page_id}
+     raw_avg_score_per_page_id, user_resource_attempt_counts, last_attempt_per_page_id}
   end
 
   defp group_and_sort_by_month_and_year(section_resources) do
@@ -2133,7 +2270,11 @@ defmodule Oli.Delivery.Sections do
     section_resources
     |> Enum.group_by(&{&1.end_date, {&1.module_id, &1.unit_id}})
     |> Enum.sort(fn {{end_date1, {_, _}}, _}, {{end_date2, {_, _}}, _} ->
-      DateTime.compare(end_date1, end_date2) == :lt
+      cond do
+        end_date1 == nil -> false
+        end_date2 == nil -> true
+        true -> DateTime.compare(end_date1, end_date2) == :lt
+      end
     end)
   end
 
@@ -2254,8 +2395,8 @@ defmodule Oli.Delivery.Sections do
     end
   end
 
-  defp get_schedule_for_week_slice(section, current_user_id, week_fn) do
-    schedule = get_ordered_schedule(section, current_user_id, :v2)
+  defp get_schedule_for_week_slice(section, settings, current_user_id, week_fn) do
+    schedule = get_ordered_schedule(section, current_user_id, settings, :v2)
 
     schedule
     |> Enum.reduce(%{}, fn {{_month, _year}, weeks}, acc ->
@@ -2269,16 +2410,14 @@ defmodule Oli.Delivery.Sections do
   @doc """
   Returns the schedule for the current week and the next week for the given section and user.
   """
-  @spec get_schedule_for_current_and_next_week(Section.t(), integer()) ::
-          any()
-  def get_schedule_for_current_and_next_week(section, current_user_id) do
+  def get_schedule_for_current_and_next_week(section, settings, current_user_id) do
     current_week_number =
       OliWeb.Components.Delivery.Utils.week_number(
         section.start_date,
         Oli.DateTime.utc_now()
       )
 
-    get_schedule_for_week_slice(section, current_user_id, fn week_number ->
+    get_schedule_for_week_slice(section, settings, current_user_id, fn week_number ->
       week_number in [current_week_number, current_week_number + 1]
     end)
   end
@@ -2791,6 +2930,11 @@ defmodule Oli.Delivery.Sections do
 
       # reset any section cached data
       SectionCache.clear(section.slug)
+
+      Oli.Delivery.DepotCoordinator.clear(
+        Oli.Delivery.Sections.SectionResourceDepot.depot_desc(),
+        section_id
+      )
     else
       throw(
         "Cannot rebuild section curriculum with a hierarchy that has unfinalized changes. See Oli.Delivery.Hierarchy.finalize/1 for details."
@@ -3593,7 +3737,7 @@ defmodule Oli.Delivery.Sections do
   # For a given section resource, clean the children attribute to ensure that:
   # 1. Any nil records are removed
   # 2. All non-nil sr id references map to a non-deleted revision in the new pub
-  defp clean_children(section_resource, sr_id_to_resource_id, new_published_resources_map) do
+  def clean_children(section_resource, sr_id_to_resource_id, new_published_resources_map) do
     updated_children =
       section_resource.children
       |> Enum.filter(fn child_id -> !is_nil(child_id) end)
@@ -4398,8 +4542,6 @@ defmodule Oli.Delivery.Sections do
   ## Returns:
   - Returns a list of maps with details of the upcoming lessons.
   """
-  @spec get_nearest_upcoming_lessons(Section.t(), integer(), integer(), Keyword.t() | nil) ::
-          list(map())
   def get_nearest_upcoming_lessons(section, user_id, lessons_count, opts \\ []) do
     page_resource_type_id = Oli.Resources.ResourceType.get_id_by_type("page")
 
@@ -4460,7 +4602,8 @@ defmodule Oli.Delivery.Sections do
       select_merge: %{
         numbering_index: sr.numbering_index,
         start_date: coalesce(se.start_date, sr.start_date),
-        end_date: coalesce(se.end_date, sr.end_date)
+        end_date: coalesce(se.end_date, sr.end_date),
+        scheduling_type: sr.scheduling_type
       }
     )
     |> where(^graded_filter)
@@ -4468,29 +4611,26 @@ defmodule Oli.Delivery.Sections do
   end
 
   @doc """
-  Returns all the resource_ids of a section grouped by resource type.
+  Returns all the resource_ids of a section grouped by resource type
+  for pages and containers in the hierarchy.
 
   %{
-    "activity" => [4630, 6927, 593],
     "container" => [7742, 7743, 7744, 7745],
-    "objective" => [4260, 4249, 4308, 4309, 4277, 4254, 4316],
-    "page" => [7400, 7568, 7436, 7714, 7165, 7433, 7181, 7451, 7592, 7449, 7587,
-    7638, 7286, 7564, 7244, 7172, 7404, 7424],
-    "tag" => [3986, 4035, 4102, 3959, 4205, 3975, 4235, 4134, 4087, 4075, 4165,
-    4036, 4052, 3973, 4023, 4030]
+    "page" => [7400, 7568, 7436, 7714, 7165, 7433, 7181, 7451, 7592, 7449, 7587]
   }
   """
 
-  def get_resource_ids_group_by_resource_type(section_slug) do
-    from([_sr, _s, _spp, _pr, rev] in DeliveryResolver.section_resource_revisions(section_slug),
-      join: rt in ResourceType,
-      on: rt.id == rev.resource_type_id,
-      select: {rt.type, rev.resource_id}
-    )
-    |> Repo.all()
-    |> Enum.group_by(fn {resource_type, _resource_id} -> resource_type end, fn {_, resource_id} ->
-      resource_id
-    end)
+  def get_resource_ids_group_by_resource_type(section) do
+    result =
+      PreviousNextIndex.get(section)
+      |> Map.values()
+      |> Enum.group_by(fn item -> item["type"] end, fn item ->
+        item["id"] |> String.to_integer()
+      end)
+
+    # Ensure each key is present in the result
+    Map.put(result, "container", result["container"] || [])
+    |> Map.put("page", result["page"] || [])
   end
 
   @doc """
@@ -4647,10 +4787,10 @@ defmodule Oli.Delivery.Sections do
     proficiency_per_learning_objective =
       case student_id do
         nil ->
-          Metrics.raw_proficiency_per_learning_objective(section)
+          Metrics.raw_proficiency_per_learning_objective(section.id)
 
         student_id ->
-          Metrics.raw_proficiency_for_student_per_learning_objective(section, student_id)
+          Metrics.raw_proficiency_per_learning_objective(section.id, student_id: student_id)
       end
 
     # get the minimal fields for all objectives from the database
@@ -4705,11 +4845,18 @@ defmodule Oli.Delivery.Sections do
     top_level_aggregation =
       Enum.reduce(top_level_objectives, %{}, fn obj, map ->
         aggregation =
-          Enum.reduce(obj.children, {0, 0}, fn child, {correct, total} ->
-            {child_correct, child_total} =
-              Map.get(proficiency_per_learning_objective, child, {0, 0})
+          Enum.reduce(obj.children, {0, 0, 0, 0}, fn child,
+                                                     {first_attempts_correct, first_attempts,
+                                                      correct, attempts} ->
+            {child_first_attempts_correct, child_first_attempts, child_correct, child_attempts} =
+              Map.get(proficiency_per_learning_objective, child, {0, 0, 0, 0})
 
-            {correct + child_correct, total + child_total}
+            {
+              first_attempts_correct + child_first_attempts_correct,
+              first_attempts + child_first_attempts,
+              correct + child_correct,
+              attempts + child_attempts
+            }
           end)
 
         Map.put(map, obj.resource_id, aggregation)
@@ -4722,11 +4869,12 @@ defmodule Oli.Delivery.Sections do
       case Map.has_key?(parent_map, objective.resource_id) do
         # this is a top-level objective
         false ->
-          {correct, total} =
-            Map.get(proficiency_per_learning_objective, objective.resource_id, {0, 0})
+          {_, _, correct, total} =
+            Map.get(proficiency_per_learning_objective, objective.resource_id, {0, 0, 0, 0})
 
           objective =
             Map.merge(objective, %{
+              section_id: section.id,
               objective: objective.title,
               objective_resource_id: objective.resource_id,
               student_proficiency_obj: Metrics.proficiency_range(calc.(correct, total), total),
@@ -4735,17 +4883,22 @@ defmodule Oli.Delivery.Sections do
               student_proficiency_subobj: ""
             })
 
-          {parent_correct, parent_total} =
-            Map.get(top_level_aggregation, objective.resource_id, {0, 0})
+          {_, _, parent_correct, parent_total} =
+            Map.get(top_level_aggregation, objective.resource_id, {0, 0, 0, 0})
 
           sub_objectives =
             Enum.map(objective.children, fn child ->
               sub_objective = Map.get(lookup_map, child)
 
-              {correct, total} =
-                Map.get(proficiency_per_learning_objective, sub_objective.resource_id, {0, 0})
+              {_, _, correct, total} =
+                Map.get(
+                  proficiency_per_learning_objective,
+                  sub_objective.resource_id,
+                  {0, 0, 0, 0}
+                )
 
               Map.merge(sub_objective, %{
+                section_id: section.id,
                 objective: objective.title,
                 objective_resource_id: objective.resource_id,
                 student_proficiency_obj:
@@ -5150,15 +5303,11 @@ defmodule Oli.Delivery.Sections do
   @doc """
   Returns a map from resource_id to the current revision title for all container resources.
   """
-  @spec container_titles(String.t()) :: map()
-  def container_titles(section_slug) do
-    container_type_id = Oli.Resources.ResourceType.get_id_by_type("container")
-
-    from([s: s, sr: sr, rev: rev] in DeliveryResolver.section_resource_revisions(section_slug),
-      where: rev.resource_type_id == ^container_type_id and rev.deleted == false,
-      select: {rev.resource_id, rev.title}
-    )
-    |> Repo.all()
+  def container_titles(section) do
+    PreviousNextIndex.get(section)
+    |> Map.values()
+    |> Enum.filter(fn item -> item["type"] == "container" end)
+    |> Enum.map(fn item -> {item["id"] |> String.to_integer(), item["title"]} end)
     |> Enum.into(%{})
   end
 
@@ -5213,5 +5362,24 @@ defmodule Oli.Delivery.Sections do
          }}
       )
     )
+  end
+
+  @doc """
+  Returns all active open and free sections that a given user is enrolled with the given context roles
+  """
+  def get_open_and_free_active_sections_by_roles(user_id, context_roles) do
+    context_role_ids = Enum.map(context_roles, & &1.id)
+
+    from(s in Section,
+      join: e in assoc(s, :enrollments),
+      join: ecr in EnrollmentContextRole,
+      on: e.id == ecr.enrollment_id,
+      where: e.user_id == ^user_id,
+      where: e.status == :enrolled,
+      where: s.open_and_free == true,
+      where: s.status == :active,
+      where: ecr.context_role_id in ^context_role_ids
+    )
+    |> Repo.all()
   end
 end

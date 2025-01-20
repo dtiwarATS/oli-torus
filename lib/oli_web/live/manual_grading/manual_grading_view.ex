@@ -19,7 +19,7 @@ defmodule OliWeb.ManualGrading.ManualGradingView do
   use OliWeb, :live_view
 
   alias Oli.Repo.{Paging, Sorting}
-  alias OliWeb.Common.{TextSearch, PagedTable, Breadcrumb, SessionContext}
+  alias OliWeb.Common.{TextSearch, PagedTable, Breadcrumb}
   alias Oli.Activities.Model.Part
   alias Oli.Delivery.Attempts.ManualGrading
   alias Oli.Delivery.Attempts.ManualGrading.BrowseOptions
@@ -86,7 +86,7 @@ defmodule OliWeb.ManualGrading.ManualGradingView do
 
         activity_types_map = Enum.reduce(activities, %{}, fn e, m -> Map.put(m, e.id, e) end)
 
-        ctx = SessionContext.init(socket, session)
+        ctx = socket.assigns.ctx
         {:ok, table_model} = TableModel.new(attempts, activity_types_map, ctx)
 
         table_model =
@@ -412,7 +412,7 @@ defmodule OliWeb.ManualGrading.ManualGradingView do
       Enum.find(table_model.rows, fn r -> r.id == String.to_integer(table_model.selected) end)
 
     # Only re-render the activities when it is the first selection or on an actual selection change
-    if is_nil(assigns.attempt) or assigns.attempt.id != activity_attempt.id do
+    if get_in(assigns, [:attempt, Access.key(:id)]) != activity_attempt.id do
       part_attempts = Core.get_latest_part_attempts(activity_attempt.attempt_guid)
 
       rendering_context =

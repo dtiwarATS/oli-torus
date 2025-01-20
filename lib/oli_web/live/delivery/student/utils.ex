@@ -4,6 +4,7 @@ defmodule OliWeb.Delivery.Student.Utils do
   """
   use Phoenix.Component
   use OliWeb, :verified_routes
+  use Appsignal.Instrumentation.Decorators
 
   import Ecto.Query, warn: false
 
@@ -26,7 +27,7 @@ defmodule OliWeb.Delivery.Student.Utils do
 
   def page_header(assigns) do
     ~H"""
-    <div id="page_header" class="flex-col justify-start items-start gap-9 flex w-full mb-16">
+    <div id="page_header" class="flex-col justify-start items-start gap-9 flex w-full">
       <div class="flex-col justify-start items-start gap-3 flex w-full">
         <div class="self-stretch flex-col justify-start items-start flex">
           <div class="self-stretch justify-between items-center inline-flex">
@@ -73,7 +74,7 @@ defmodule OliWeb.Delivery.Student.Utils do
             </div>
           </div>
         </div>
-        <div class="justify-start items-center gap-3 inline-flex">
+        <div class="justify-start items-center gap-3 flex-col">
           <div
             :if={@page_context.page.duration_minutes}
             class="opacity-50 justify-start items-center gap-1.5 flex"
@@ -92,8 +93,30 @@ defmodule OliWeb.Delivery.Student.Utils do
               </div>
             </div>
           </div>
-          <div role="page schedule" class="justify-start items-start gap-1 flex">
-            <div class="opacity-50 dark:text-white text-xs font-normal">Due:</div>
+          <div
+            :if={@page_context.effective_settings.start_date}
+            role="page start schedule"
+            class="justify-start items-start gap-1 flex"
+          >
+            <div class="opacity-50 dark:text-white text-xs font-normal">
+              Available by:
+            </div>
+            <div class="dark:text-white text-xs font-normal">
+              <%= FormatDateTime.to_formatted_datetime(
+                @page_context.effective_settings.start_date,
+                @ctx,
+                "{WDshort} {Mshort} {D}, {YYYY}"
+              ) %>
+            </div>
+          </div>
+          <div
+            :if={@page_context.effective_settings.end_date}
+            role="page schedule"
+            class="justify-start items-start gap-1 flex"
+          >
+            <div class="opacity-50 dark:text-white text-xs font-normal">
+              <%= label_for_scheduling_type(@page_context.effective_settings.scheduling_type) %>
+            </div>
             <div class="dark:text-white text-xs font-normal">
               <%= FormatDateTime.to_formatted_datetime(
                 @page_context.effective_settings.end_date,
@@ -149,6 +172,140 @@ defmodule OliWeb.Delivery.Student.Utils do
     </div>
     """
   end
+
+  attr :effective_settings, Oli.Delivery.Settings.Combined
+  attr :ctx, SessionContext
+  attr :is_adaptive, :boolean
+
+  def page_terms(assigns) do
+    ~H"""
+    <div
+      id="page_terms"
+      class="dark:text-[#eeebf5] text-base leading-normal font-normal flex flex-col w-full mb-10"
+    >
+      <span class="font-bold">
+        TERMS
+      </span>
+      <ul class="list-disc ml-6">
+        <li id="page_due_terms">
+          <.page_due_term effective_settings={@effective_settings} ctx={@ctx} />
+        </li>
+        <.maybe_add_time_limit_term effective_settings={@effective_settings} />
+        <li :if={@effective_settings.end_date != nil} id="page_scoring_terms">
+          <%= page_scoring_term(@effective_settings.scoring_strategy_id) %>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  defp maybe_add_time_limit_term(%{effective_settings: %{time_limit: time_limit}} = assigns)
+       when time_limit > 0 do
+    ~H"""
+    <li id="page_time_limit_term">
+      You have <b><%= parse_minutes(@effective_settings.time_limit) %></b>
+      to complete the assessment from the time you begin. If you exceed this time, it will be marked as late.
+    </li>
+    """
+  end
+
+  defp maybe_add_time_limit_term(assigns) do
+    ~H"""
+    """
+  end
+
+  attr :effective_settings, Oli.Delivery.Settings.Combined
+  attr :ctx, SessionContext
+
+  defp page_due_term(%{effective_settings: %{end_date: nil}} = assigns) do
+    ~H"""
+    This assignment is <b>not yet scheduled.</b>
+    """
+  end
+
+  defp page_due_term(%{effective_settings: %{end_date: end_date}} = assigns) do
+    verb_form =
+      case DateTime.compare(DateTime.utc_now(), end_date) do
+        :gt -> "was"
+        :lt -> "is"
+      end
+
+    assigns = assign(assigns, verb_form: verb_form)
+
+    ~H"""
+    <%= "This assignment #{@verb_form} #{scheduling_type(@effective_settings.scheduling_type)}" %>
+    <b>
+      <%= FormatDateTime.to_formatted_datetime(
+        @effective_settings.end_date,
+        @ctx,
+        "{WDshort} {Mshort} {D}, {YYYY} by {h12}:{m}{am}."
+      ) %>
+    </b>
+    """
+  end
+
+  defp scheduling_type(:due_by), do: "due on"
+  defp scheduling_type(_scheduling_type), do: "suggested by"
+
+  @doc """
+  Parses the minutes into a human-readable format.
+
+  iex> parse_minutes(1)
+  "1 minute"
+
+  iex> parse_minutes(60)
+  "1 hour"
+
+  iex> parse_minutes(61)
+  "1 hour and 1 minute"
+
+  iex> parse_minutes(120)
+  "2 hours"
+
+  iex> parse_minutes(125)
+  "2 hours and 5 minutes"
+  """
+  def parse_minutes(minutes) when minutes <= 60, do: to_minutes(minutes)
+
+  def parse_minutes(minutes) when minutes > 60 do
+    hours = div(minutes, 60)
+    minutes = rem(minutes, 60)
+
+    if minutes != 0,
+      do: "#{to_hours(hours)} and #{to_minutes(minutes)}",
+      else: "#{to_hours(hours)}"
+  end
+
+  defp to_minutes(1), do: "1 minute"
+  defp to_minutes(minutes), do: "#{minutes} minutes"
+  defp to_hours(1), do: "1 hour"
+  defp to_hours(hours), do: "#{hours} hours"
+
+  defp page_scoring_term(1 = _scoring_strategy_id),
+    do: "Your overall score for this assignment will be the average score of your attempts."
+
+  defp page_scoring_term(3 = _scoring_strategy_id),
+    do: "Your overall score for this assignment will be the score of your last attempt."
+
+  defp page_scoring_term(4 = _scoring_strategy_id),
+    do: "Your overall score for this assignment will be the total sum of your attempts."
+
+  # scoring strategy 2 is the default scoring strategy
+  defp page_scoring_term(_scoring_strategy_id),
+    do: "Your overall score for this assignment will be the score of your best attempt."
+
+  @doc """
+  Returns the scheduling type label for the container.
+  When all the contained resources are of :read_by type, then
+  the label will be "Read by: "
+  """
+  def container_label_for_scheduling_type([:read_by]), do: "Read by: "
+  def container_label_for_scheduling_type(_), do: "Due by: "
+
+  def label_for_scheduling_type(:due_by), do: "Due by: "
+  def label_for_scheduling_type(:read_by), do: "Read by: "
+  def label_for_scheduling_type(:inclass_activity), do: "In-class activity by: "
+  def label_for_scheduling_type(_), do: ""
 
   def proficiency_explanation_modal(assigns) do
     assigns =
@@ -255,7 +412,7 @@ defmodule OliWeb.Delivery.Student.Utils do
   def reset_attempts_button(assigns) do
     ~H"""
     <button
-      :if={@activity_count > 0 && @page_context.review_mode == false && not @advanced_delivery}
+      :if={@page_context.review_mode == false && not @advanced_delivery && @activity_count > 0}
       id="reset_answers"
       class="btn btn-link btn-sm text-center mb-10"
       onClick={"window.OLI.finalize('#{@section_slug}', '#{@page_context.page.slug}', '#{hd(@page_context.resource_attempts).attempt_guid}', false, 'reset_answers')"}
@@ -353,15 +510,34 @@ defmodule OliWeb.Delivery.Student.Utils do
     - `params`: (Optional) Additional query parameters in a list or map format. If omitted, a URL is generated without additional parameters.
 
   ## Examples
-    - `schedule_live_path("math")` returns `"/sections/math/assignments"`.
-    - `schedule_live_path("math", request_path: "some/previous/url")` returns `"/sections/math/assignments?request_path=some/previous/url"`.
+    - `schedule_live_path("math")` returns `"/sections/math/student_schedule"`.
+    - `schedule_live_path("math", request_path: "some/previous/url")` returns `"/sections/math/student_schedule?request_path=some/previous/url"`.
   """
   def schedule_live_path(section_slug, params \\ [])
 
   def schedule_live_path(section_slug, []),
-    do: ~p"/sections/#{section_slug}/assignments"
+    do: ~p"/sections/#{section_slug}/student_schedule"
 
   def schedule_live_path(section_slug, params),
+    do: ~p"/sections/#{section_slug}/student_schedule?#{params}"
+
+  @doc """
+  Generates a URL for the course assignments.
+
+  ## Parameters
+    - `section_slug`: The unique identifier for the section.
+    - `params`: (Optional) Additional query parameters in a list or map format. If omitted, a URL is generated without additional parameters.
+
+  ## Examples
+    - `assignments_live_path("math")` returns `"/sections/math/assignments"`.
+    - `assignments_live_path("math", request_path: "some/previous/url")` returns `"/sections/math/assignments?request_path=some/previous/url"`.
+  """
+  def assignments_live_path(section_slug, params \\ [])
+
+  def assignments_live_path(section_slug, []),
+    do: ~p"/sections/#{section_slug}/assignments"
+
+  def assignments_live_path(section_slug, params),
     do: ~p"/sections/#{section_slug}/assignments?#{params}"
 
   # nil case arises for linked loose pages not in in hierarchy index
@@ -402,17 +578,18 @@ defmodule OliWeb.Delivery.Student.Utils do
     )
   end
 
-  def build_html(assigns, mode) do
-    %{section: section, current_user: current_user, page_context: page_context} = assigns
+  def build_html(assigns, mode, opts \\ []) do
+    %{section: section, page_context: page_context} = assigns
 
     render_context = %Context{
       enrollment:
         Oli.Delivery.Sections.get_enrollment(
           section.slug,
-          current_user.id
+          page_context.user.id
         ),
-      user: current_user,
+      user: page_context.user,
       section_slug: section.slug,
+      project_slug: Oli.Repo.get(Oli.Authoring.Course.Project, section.base_project_id).slug,
       mode: mode,
       activity_map: page_context.activities,
       resource_summary_fn: &Oli.Resources.resource_summary(&1, section.slug, Resolver),
@@ -436,7 +613,8 @@ defmodule OliWeb.Delivery.Student.Utils do
           assigns.page_context.page,
           assigns.request_path,
           assigns.selected_view
-        )
+        ),
+      is_liveview: opts[:is_liveview] || false
     }
 
     attempt_content = get_attempt_content(page_context)
@@ -444,7 +622,9 @@ defmodule OliWeb.Delivery.Student.Utils do
     # Cache the page as text to allow the AI agent LV to access it.
     cache_page_as_text(render_context, attempt_content, page_context.page.id)
 
-    Page.render(render_context, attempt_content, Page.Html)
+    Appsignal.instrument("Page.render", fn ->
+      Page.render(render_context, attempt_content, Page.Html)
+    end)
   end
 
   defp cache_page_as_text(render_context, content, page_id) do
@@ -464,6 +644,7 @@ defmodule OliWeb.Delivery.Student.Utils do
     |> Enum.uniq()
   end
 
+  @decorate transaction_event()
   def get_required_activity_scripts(_page_context) do
     # TODO Optimization: get only activity scripts of activities contained in the page.
     # We could infer the contained activities from the page revision content model.
@@ -515,6 +696,7 @@ defmodule OliWeb.Delivery.Student.Utils do
 
   ## Parameters:
   - `resource_end_date`: The `DateTime` representing the end date of the resource.
+  - `scheduling_type`: The type of scheduling for the resource, such as `:read_by`, `:due_by`, or `:inclass_activity`.
   - `context`: The `SessionContext` struct containing the user's timezone information.
 
   ## Returns:
@@ -522,14 +704,13 @@ defmodule OliWeb.Delivery.Student.Utils do
   - "Not yet scheduled" if the provided end date is nil.
 
   ## Examples:
-      iex> days_difference(~U[2024-05-12T00:00:00Z], %SessionContext{local_tz: "America/Montevideo"})
+      iex> days_difference(~U[2024-05-12T00:00:00Z], :read_by, %SessionContext{local_tz: "America/Montevideo"})
       "1 day left"
   """
-  @spec days_difference(DateTime.t(), SessionContext.t()) :: String.t()
 
-  def days_difference(nil, _context), do: "Not yet scheduled"
+  def days_difference(nil, _scheduling_type, _context), do: "Not yet scheduled"
 
-  def days_difference(resource_end_date, context) do
+  def days_difference(resource_end_date, scheduling_type, context) do
     {localized_end_date, today} =
       case FormatDateTime.maybe_localized_datetime(resource_end_date, context) do
         {:not_localized, datetime} ->
@@ -540,20 +721,29 @@ defmodule OliWeb.Delivery.Student.Utils do
            context.local_tz |> Oli.DateTime.now!() |> DateTime.to_date()}
       end
 
-    case Timex.diff(localized_end_date, today, :days) do
-      0 ->
+    case {Timex.diff(localized_end_date, today, :days), scheduling_type} do
+      {0, :read_by} ->
+        "Suggested for Today"
+
+      {0, _scheduling_type} ->
         "Due Today"
 
-      1 ->
+      {1, _scheduling_type} ->
         "1 day left"
 
-      -1 ->
+      {-1, :read_by} ->
+        "Past suggested date by a day"
+
+      {-1, _scheduling_type} ->
         "Past Due by a day"
 
-      days when days < 0 ->
+      {days, :read_by} when days < 0 ->
+        "Past suggested date by #{abs(days)} days"
+
+      {days, _scheduling_type} when days < 0 ->
         "Past Due by #{abs(days)} days"
 
-      days ->
+      {days, _scheduling_type} ->
         "#{days} days left"
     end
   end
@@ -722,6 +912,9 @@ defmodule OliWeb.Delivery.Student.Utils do
     end
   end
 
+  def is_adaptive_page(%Oli.Resources.Revision{content: %{"advancedDelivery" => true}}), do: true
+  def is_adaptive_page(_), do: false
+
   defp build_page_link_params(section_slug, page, request_path, selected_view) do
     current_page_path =
       lesson_live_path(section_slug, page.slug,
@@ -733,5 +926,78 @@ defmodule OliWeb.Delivery.Student.Utils do
       request_path: current_page_path,
       selected_view: selected_view
     ]
+  end
+
+  def emit_page_viewed_event(socket) do
+    section = socket.assigns.section
+    context = socket.assigns.page_context
+
+    page_sub_type =
+      if Map.get(context.page.content, "advancedDelivery", false) do
+        "advanced"
+      else
+        "basic"
+      end
+
+    {project_id, publication_id} = get_project_and_publication_ids(section.id, context.page.id)
+
+    emit_page_viewed_helper(
+      %Oli.Analytics.XAPI.Events.Context{
+        user_id: socket.assigns.current_user.id,
+        host_name: host_name(),
+        section_id: section.id,
+        project_id: project_id,
+        publication_id: publication_id
+      },
+      %{
+        attempt_guid: List.first(context.resource_attempts).attempt_guid,
+        attempt_number: List.first(context.resource_attempts).attempt_number,
+        resource_id: context.page.resource_id,
+        timestamp: DateTime.utc_now(),
+        page_sub_type: page_sub_type
+      }
+    )
+
+    socket
+  end
+
+  defp emit_page_viewed_helper(
+         %Oli.Analytics.XAPI.Events.Context{} = context,
+         %{
+           attempt_guid: _page_attempt_guid,
+           attempt_number: _page_attempt_number,
+           resource_id: _page_id,
+           timestamp: _timestamp,
+           page_sub_type: _page_sub_type
+         } = page_details
+       ) do
+    event = Oli.Analytics.XAPI.Events.Attempt.PageViewed.new(context, page_details)
+    Oli.Analytics.XAPI.emit(:page_viewed, event)
+  end
+
+  defp get_project_and_publication_ids(section_id, revision_id) do
+    # From the SectionProjectPublication table, get the project_id and publication_id
+    # where a published resource exists for revision_id
+    # and the section_id matches the section_id
+
+    query =
+      from sp in Oli.Delivery.Sections.SectionsProjectsPublications,
+        join: pr in Oli.Publishing.PublishedResource,
+        on: pr.publication_id == sp.publication_id,
+        where: sp.section_id == ^section_id and pr.revision_id == ^revision_id,
+        select: {sp.project_id, sp.publication_id}
+
+    # Return nil if somehow we cannot resolve this resource.  This is just a guaranteed that
+    # we can never throw an error here
+    case Oli.Repo.all(query) do
+      [] -> {nil, nil}
+      other -> hd(other)
+    end
+  end
+
+  defp host_name() do
+    Application.get_env(:oli, OliWeb.Endpoint)
+    |> Keyword.get(:url)
+    |> Keyword.get(:host)
   end
 end

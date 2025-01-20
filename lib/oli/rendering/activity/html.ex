@@ -4,6 +4,7 @@ defmodule Oli.Rendering.Activity.Html do
   """
   import Oli.Utils
 
+  alias Oli.Delivery.Settings
   alias Oli.Rendering.Context
   alias Oli.Rendering.Error
   alias Oli.Rendering.Activity.ActivitySummary
@@ -179,7 +180,7 @@ defmodule Oli.Rendering.Activity.Html do
         groupId: group_id,
         bibParams: bib_params,
         learningLanguage: learning_language,
-        showFeedback: Oli.Delivery.Settings.show_feedback?(effective_settings),
+        showFeedback: Settings.show_feedback?(effective_settings),
         pageAttemptGuid:
           if is_nil(resource_attempt) do
             ""
@@ -195,7 +196,8 @@ defmodule Oli.Rendering.Activity.Html do
         renderPointMarkers: render_opts.render_point_markers,
         isAnnotationLevel: true,
         variables: variables,
-        pageLinkParams: Enum.into(context.page_link_params, %{})
+        pageLinkParams: Enum.into(context.page_link_params, %{}),
+        allowHints: effective_settings && effective_settings.allow_hints
       }
       |> Poison.encode!()
       |> HtmlEntities.encode()

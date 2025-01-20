@@ -106,31 +106,34 @@ defmodule OliWeb.Components.Common do
         "rounded text-white hover:text-white bg-primary-500 hover:bg-primary-600 active:bg-primary-700 focus:ring-2 focus:ring-primary-400 dark:bg-primary-600 dark:hover:bg-primary dark:active:bg-primary-400 focus:outline-none dark:focus:ring-primary-700 hover:no-underline"
 
       :secondary ->
-        "rounded text-body-color bg-transparent hover:bg-gray-200 active:text-white active:bg-primary-700 focus:ring-2 focus:ring-primary-400 dark:text-body-color-dark dark:hover:bg-gray-600 dark:active:bg-primary-400 focus:outline-none dark:focus:ring-primary-700 hover:no-underline"
+        "rounded text-body-color hover:text-body-color bg-transparent hover:bg-gray-200 active:text-white active:bg-primary-700 focus:ring-2 focus:ring-primary-400 dark:text-body-color-dark dark:hover:bg-gray-600 dark:active:bg-primary-400 focus:outline-none dark:focus:ring-primary-700 hover:no-underline"
 
       :tertiary ->
-        "rounded text-primary-700 bg-primary-50 hover:bg-primary-100 active:bg-primary-200 focus:ring-2 focus:ring-primary-100 dark:text-primary-300 dark:bg-primary-800 dark:hover:bg-primary-700 dark:active:bg-primary-600 focus:outline-none dark:focus:ring-primary-800 hover:no-underline"
+        "rounded text-primary-700 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 active:bg-primary-200 focus:ring-2 focus:ring-primary-100 dark:text-primary-300 dark:bg-primary-800 dark:hover:bg-primary-700 dark:active:bg-primary-600 focus:outline-none dark:focus:ring-primary-800 hover:no-underline"
+
+      :outline ->
+        "rounded text-body-color hover:text-body-color bg-transparent border border-body-color dark:border-body-color-dark hover:bg-gray-200 active:text-white active:bg-primary-700 focus:ring-2 focus:ring-primary-400 dark:text-body-color-dark dark:hover:bg-gray-600 dark:active:bg-primary-400 dark:focus:ring-primary-700 hover:no-underline"
 
       :light ->
-        "rounded text-body-color bg-gray-100 hover:bg-gray-200 active:bg-gray-300 focus:ring-2 focus:ring-gray-100 dark:text-white dark:bg-gray-800 dark:hover:bg-gray-700 dark:active:bg-gray-600 focus:outline-none dark:focus:ring-gray-800 hover:no-underline"
+        "rounded text-body-color hover:text-body-color bg-gray-100 hover:bg-gray-200 active:bg-gray-300 focus:ring-2 focus:ring-gray-100 dark:text-white dark:bg-gray-800 dark:hover:bg-gray-700 dark:active:bg-gray-600 focus:outline-none dark:focus:ring-gray-800 hover:no-underline"
 
       :dark ->
-        "rounded text-white bg-gray-700 hover:bg-gray-800 active:bg-gray-600 focus:ring-2 focus:ring-gray-600 dark:text-white dark:bg-gray-700 dark:hover:bg-gray-600 dark:active:bg-gray-500 focus:outline-none dark:focus:ring-gray-500 hover:no-underline"
+        "rounded text-white hover:text-white bg-gray-700 hover:bg-gray-800 active:bg-gray-600 focus:ring-2 focus:ring-gray-600 dark:text-white dark:bg-gray-700 dark:hover:bg-gray-600 dark:active:bg-gray-500 focus:outline-none dark:focus:ring-gray-500 hover:no-underline"
 
       :info ->
-        "rounded text-white bg-gray-500 hover:bg-gray-600 active:bg-gray-700 focus:ring-2 focus:ring-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 dark:active:bg-gray-400 focus:outline-none dark:focus:ring-gray-700 hover:no-underline"
+        "rounded text-white hover:text-white bg-gray-500 hover:bg-gray-600 active:bg-gray-700 focus:ring-2 focus:ring-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500 dark:active:bg-gray-400 focus:outline-none dark:focus:ring-gray-700 hover:no-underline"
 
       :success ->
-        "rounded text-white bg-green-600 hover:bg-green-700 active:bg-green-800 focus:ring-2 focus:ring-green-700 dark:bg-green-600 dark:hover:bg-green-500 dark:active:bg-green-400 focus:outline-none dark:focus:ring-green-700 hover:no-underline"
+        "rounded text-white hover:text-white bg-green-600 hover:bg-green-700 active:bg-green-800 focus:ring-2 focus:ring-green-700 dark:bg-green-600 dark:hover:bg-green-500 dark:active:bg-green-400 focus:outline-none dark:focus:ring-green-700 hover:no-underline"
 
       :warning ->
-        "rounded text-white bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700 focus:ring-2 focus:ring-yellow-400 dark:bg-yellow-600 dark:hover:bg-yellow-500 dark:active:bg-yellow-400 focus:outline-none dark:focus:ring-yellow-700 hover:no-underline"
+        "rounded text-white hover:text-white bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700 focus:ring-2 focus:ring-yellow-400 dark:bg-yellow-600 dark:hover:bg-yellow-500 dark:active:bg-yellow-400 focus:outline-none dark:focus:ring-yellow-700 hover:no-underline"
 
       :danger ->
-        "rounded text-white bg-red-500 hover:bg-red-600 active:bg-red-700 focus:ring-2 focus:ring-red-400 dark:bg-red-600 dark:hover:bg-red-500 dark:active:bg-red-400 focus:outline-none dark:focus:ring-red-700 hover:no-underline"
+        "rounded text-white hover:text-white bg-red-500 hover:bg-red-600 active:bg-red-700 focus:ring-2 focus:ring-red-400 dark:bg-red-600 dark:hover:bg-red-500 dark:active:bg-red-400 focus:outline-none dark:focus:ring-red-700 hover:no-underline"
 
       :link ->
-        "rounded text-blue-500 hover:text-blue-600 active:text-blue-700 focus:ring-2 focus:ring-blue-400 dark:text-blue-600 dark:hover:text-blue-500 dark:active:text-blue-400 focus:outline-none dark:focus:ring-blue-700 hover:underline cursor-pointer"
+        "rounded text-blue-500 hover:text-blue-600 hover:text-blue-600 active:text-blue-700 focus:ring-2 focus:ring-blue-400 dark:text-blue-600 dark:hover:text-blue-500 dark:active:text-blue-400 focus:outline-none dark:focus:ring-blue-700 hover:underline cursor-pointer"
 
       :link_info ->
         "rounded text-gray-500 hover:text-gray-600 active:text-gray-700 focus:ring-2 focus:ring-gray-400 dark:text-gray-600 dark:hover:text-gray-500 dark:active:text-gray-400 focus:outline-none dark:focus:ring-gray-700 hover:underline cursor-pointer"
@@ -175,6 +178,7 @@ defmodule OliWeb.Components.Common do
       :primary,
       :secondary,
       :tertiary,
+      :outline,
       :light,
       :dark,
       :info,
@@ -194,7 +198,7 @@ defmodule OliWeb.Components.Common do
   attr(:href, :string, default: nil)
   attr(:type, :string, default: nil)
   attr(:class, :string, default: nil)
-  attr(:rest, :global, include: ~w(disabled form name value target rel download))
+  attr(:rest, :global, include: ~w(disabled form name value target rel download xphx-mouseover))
 
   slot(:inner_block, required: true)
 
@@ -205,7 +209,7 @@ defmodule OliWeb.Components.Common do
         <button
           type={@type}
           class={[
-            "whitespace-nowrap",
+            "text-center whitespace-nowrap overflow-hidden text-ellipsis",
             button_variant_classes(@variant, disabled: @rest[:disabled]),
             button_size_classes(@size),
             @class
@@ -218,7 +222,7 @@ defmodule OliWeb.Components.Common do
         <a
           href={@href}
           class={[
-            "whitespace-nowrap",
+            "text-center whitespace-nowrap overflow-hidden text-ellipsis",
             button_variant_classes(@variant, disabled: @rest[:disabled]),
             button_size_classes(@size),
             @class
@@ -281,7 +285,8 @@ defmodule OliWeb.Components.Common do
 
   attr(:errors, :list, default: [])
   attr(:class, :string, default: nil)
-  attr(:class_label, :string, default: "")
+
+  attr(:label_class, :string, default: "")
   attr(:checked, :boolean, doc: "the checked flag for checkbox inputs")
   attr(:ctx, :map, default: nil)
   attr(:prompt, :string, default: nil, doc: "the prompt for select inputs")
@@ -293,6 +298,7 @@ defmodule OliWeb.Components.Common do
                 multiple pattern placeholder readonly required rows size step)
   )
 
+  attr(:label_position, :atom, default: :top, values: [:top, :bottom, :responsive])
   attr(:error_position, :atom, default: :bottom, values: [:top, :bottom])
 
   slot(:inner_block)
@@ -313,7 +319,7 @@ defmodule OliWeb.Components.Common do
 
     ~H"""
     <div class="contents" phx-feedback-for={@name}>
-      <label class={"flex gap-2 items-center #{@class_label}"}>
+      <label class={"flex gap-2 items-center #{@label_class}"}>
         <input type="hidden" name={@name} value="false" />
         <input
           type="checkbox"
@@ -473,6 +479,9 @@ defmodule OliWeb.Components.Common do
 
     ~H"""
     <div class={@group_class} phx-feedback-for={@name}>
+      <.label :if={@label && @label_position == :top} class={@label_class} for={@id}>
+        <%= @label %>
+      </.label>
       <.error :for={msg <- @errors} :if={@error_position == :top}><%= msg %></.error>
       <input
         type={@type}
@@ -483,7 +492,13 @@ defmodule OliWeb.Components.Common do
         placeholder={@placeholder}
         {@rest}
       />
-      <.label :if={@label} class={@label_class} for={@id}><%= @label %></.label>
+      <.label
+        :if={@label && (@label_position == :bottom || @label_position == :responsive)}
+        class={@label_class}
+        for={@id}
+      >
+        <%= @label %>
+      </.label>
       <.error :for={msg <- @errors} :if={@error_position == :bottom}><%= msg %></.error>
     </div>
     """
@@ -503,14 +518,15 @@ defmodule OliWeb.Components.Common do
   defp set_input_classes(assigns) do
     input_class = [
       assigns.class,
-      assigns.errors != [] && "border-red-400 focus:border-red-400"
+      assigns.errors != [] && "border-red-400 focus:border-red-400",
+      assigns.rest[:readonly] && "bg-gray-200 dark:bg-gray-600"
     ]
 
     {group_class, label_class, input_class} =
       if assigns[:variant] == "outlined" do
         {"form-label-group", "control-label pointer-events-none", ["form-control" | input_class]}
       else
-        {"flex flex-col-reverse", "", input_class}
+        {"flex flex-col", "", input_class}
       end
 
     assign(assigns, group_class: group_class, label_class: label_class, input_class: input_class)
@@ -586,8 +602,15 @@ defmodule OliWeb.Components.Common do
   attr(:percent, :integer, required: true)
   attr(:width, :string, default: "100%")
   attr(:show_percent, :boolean, default: true)
+
+  attr(:show_halo, :boolean,
+    default: false,
+    doc: "shows a blurry halo at the end of the progress bar"
+  )
+
   attr(:role, :string, default: "progress_bar")
   attr(:height, :string, default: "h-1")
+  attr(:rounded, :string, default: "rounded-[60px]")
 
   attr(:on_going_colour, :string,
     default: "bg-[#1E9531]",
@@ -599,29 +622,49 @@ defmodule OliWeb.Components.Common do
     doc: "the colour of the progress bar when progress = 100%"
   )
 
+  attr(:not_completed_colour, :string,
+    default: "bg-gray-600/20 dark:bg-white/20",
+    doc: "the colour of the not completed section of the progress bar"
+  )
+
   def progress_bar(assigns) do
     ~H"""
-    <div class="flex flex-row items-center gap-3 mx-auto" role={@role}>
-      <div class="flex justify-center w-full">
-        <div
-          class={"rounded-[60px] bg-gray-600/20 #{@height} dark:bg-white/20"}
-          style={"width: #{@width}"}
-        >
+    <div class="flex flex-row items-center gap-3 mx-auto w-full" role={@role}>
+      <div class="flex justify-center w-full relative">
+        <div class={"#{@rounded} #{@height} #{@not_completed_colour}"} style={"width: #{@width}"}>
           <div
+            role="progress"
             class={[
-              "rounded-[60px] #{@height}",
+              "#{@rounded} #{@height}",
               if(@percent == 100, do: @completed_colour, else: @on_going_colour)
             ]}
             style={"width: #{if @percent == 0, do: 1, else: @percent}%"}
           >
           </div>
         </div>
+
+        <div
+          :if={@show_halo}
+          role="halo"
+          class="absolute -top-[5px] z-50 w-6 h-3.5 bg-[#39e581]/40 rounded-[47px] blur-[8px]"
+          style={"left: #{@percent}%; transform: translateX(-12px);"}
+        >
+        </div>
       </div>
       <div
         :if={@show_percent}
         class="text-right dark:text-white text-base font-semibold leading-loose tracking-tight"
       >
-        <%= @percent %>%
+        <%= if @percent == 100 do %>
+          <div class="flex gap-1 ml-2">
+            Completed
+            <div class="w-7 h-8 py-1 flex gap-2.5">
+              <OliWeb.Icons.check />
+            </div>
+          </div>
+        <% else %>
+          <%= @percent %>%
+        <% end %>
       </div>
     </div>
     """
@@ -1106,7 +1149,7 @@ defmodule OliWeb.Components.Common do
         field={@form[@field_name]}
         label={@field_label}
         type="hidden"
-        class_label="control-label"
+        label_class="control-label"
         error_position={:top}
         errors={@form.errors}
       />
@@ -1128,6 +1171,55 @@ defmodule OliWeb.Components.Common do
           id: "rich_text_editor_react_component"
         ) %>
       </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a simple form box.
+
+  ## Examples
+
+      <.form_box for={@form} phx-change="validate" phx-submit="save">
+        <.input field={@form[:email]} label="Email"/>
+        <.input field={@form[:username]} label="Username" />
+        <:actions>
+          <.button>Save</.button>
+        </:actions>
+      </.form_box>
+  """
+  attr :for, :any, required: true, doc: "the data structure for the form"
+  attr :as, :any, default: nil, doc: "the server side parameter to collect all input under"
+
+  attr :class, :string, default: nil, doc: "the class to apply to the form"
+
+  attr :rest, :global,
+    include: ~w(autocomplete name rel action enctype method novalidate target multipart),
+    doc: "the arbitrary HTML attributes to apply to the form tag"
+
+  slot :title, default: nil, doc: "the title of the form"
+  slot :subtitle, default: nil, doc: "the subtitle of the form"
+
+  slot :inner_block, required: true
+  slot :actions, doc: "the slot for form actions, such as a submit button"
+
+  def form_box(assigns) do
+    ~H"""
+    <div class={["w-96 dark:bg-neutral-700 sm:rounded-md sm:shadow-lg dark:text-white py-8 px-10"]}>
+      <div :if={@title} class="text-center text-xl font-normal leading-7 pb-6">
+        <%= render_slot(@title) %>
+      </div>
+      <div :if={@subtitle} class="text-center leading-6 pb-6">
+        <%= render_slot(@subtitle) %>
+      </div>
+
+      <.form :let={f} for={@for} as={@as} {@rest}>
+        <%= render_slot(@inner_block, f) %>
+
+        <div :for={action <- @actions} class="mt-2 flex flex-col items-center justify-between gap-2">
+          <%= render_slot(action, f) %>
+        </div>
+      </.form>
     </div>
     """
   end

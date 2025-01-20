@@ -25,6 +25,29 @@ export type BulkActivityUpdate = {
   authoring?: any;
 };
 
+export type BulkActivityCreate = {
+  title: string;
+  objectives: ResourceId[];
+  tags: ResourceId[];
+  content: ActivityModelSchema;
+  activityTypeSlug: ActivityTypeSlug;
+};
+
+export type CreateRevision = {
+  revisionSlug: string;
+  resourceId: ResourceId;
+  activityTypeSlug: string;
+  title: string;
+  objectives: any;
+  tags: any;
+  content: any;
+};
+
+export type CreatedBulk = {
+  result: 'success';
+  revisions: CreateRevision[];
+};
+
 export type Created = {
   result: 'success';
   revisionSlug: string;
@@ -157,6 +180,38 @@ export function create(
   const params = {
     method: 'POST',
     body: JSON.stringify({ model, objectives, scope }),
+    url: `/project/${project}/activity/${activityTypeSlug}`,
+  };
+
+  return makeRequest<Created>(params);
+}
+
+export function createBulk(
+  project: ProjectSlug,
+  bulkData: BulkActivityCreate[],
+  scope = 'embedded',
+) {
+  const params = {
+    method: 'POST',
+    body: JSON.stringify({ bulkData, scope }),
+    url: `/project/${project}/create/activity/bulk`,
+  };
+
+  return makeRequest<CreatedBulk>(params);
+}
+
+export function createFull(
+  project: ProjectSlug,
+  activityTypeSlug: ActivityTypeSlug,
+  model: ActivityModelSchema,
+  title: string,
+  objective_map: ObjectiveMap,
+  tags: ResourceId[],
+  scope = 'embedded',
+) {
+  const params = {
+    method: 'POST',
+    body: JSON.stringify({ model, title, objectives: [], objective_map, tags, scope }),
     url: `/project/${project}/activity/${activityTypeSlug}`,
   };
 

@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { EntityId } from '@reduxjs/toolkit';
+import { selectCustom } from 'apps/authoring/store/page/slice';
 import { updatePart } from 'apps/authoring/store/parts/actions/updatePart';
 import { NotificationType } from 'apps/delivery/components/NotificationContext';
 import { useKeyDown } from 'hooks/useKeyDown';
 import { selectCurrentActivityTree } from '../../../delivery/store/features/groups/selectors/deck';
-import { selectBottomPanel, setCopiedPart, setRightPanelActiveTab } from '../../store/app/slice';
+import {
+  selectBottomPanel,
+  setCopiedPart,
+  setCopiedPartActivityId,
+  setRightPanelActiveTab,
+} from '../../store/app/slice';
 import {
   selectCurrentPartPropertyFocus,
   selectCurrentSelection,
@@ -23,10 +29,11 @@ const EditingCanvas: React.FC = () => {
   const currentActivityTree = useSelector(selectCurrentActivityTree);
   const _currentPartSelection = useSelector(selectCurrentSelection);
   const _currentPartPropertyFocus = useSelector(selectCurrentPartPropertyFocus);
+  const _currentLessonCustom = useSelector(selectCustom);
   const [_currentActivity] = (currentActivityTree || []).slice(-1);
 
   const [currentActivityId, setCurrentActivityId] = useState<EntityId>('');
-
+  const [customInterfaceSettings, setCustomInterfaceSettings] = useState<string>('default');
   const [showConfigModal, setShowConfigModal] = useState<boolean>(false);
   const [configModalFullscreen, setConfigModalFullscreen] = useState<boolean>(false);
   const [configPartId, setConfigPartId] = useState<string>('');
@@ -92,9 +99,33 @@ const EditingCanvas: React.FC = () => {
 
   const handlePartCopy = async (part: any) => {
     dispatch(setCopiedPart({ copiedPart: part }));
+    if (currentActivityTree) {
+      // Global 'currentActivityId' was not up to date with the current selected activity if when we select a subscreen from a layer
+      // so we will get the currentActivity from the currentActivityTree and then set the setCopiedPartActivityId
+      const [currentActivity] = currentActivityTree.slice(-1);
+      dispatch(setCopiedPartActivityId({ copiedPartActivityId: currentActivity.id }));
+    } else {
+      // we don't need this. Just for any fail safe I did't remove this but ideally the code will never reach here.
+      dispatch(setCopiedPartActivityId({ copiedPartActivityId: currentActivityId }));
+    }
     return true;
   };
-
+  useEffect(() => {
+    let interfaceSettingClass = '';
+    if (_currentLessonCustom.grid) {
+      interfaceSettingClass += ' show-grid';
+    }
+    if (_currentLessonCustom.columnGuides) {
+      interfaceSettingClass += ' show-column-guide';
+    }
+    if (_currentLessonCustom.centerpoint) {
+      interfaceSettingClass += ' show-grid show-center';
+    }
+    if (_currentLessonCustom.rowGuides) {
+      interfaceSettingClass += ' show-row-guide';
+    }
+    setCustomInterfaceSettings(interfaceSettingClass);
+  }, [_currentLessonCustom]);
   const handleStageClick = (e: any) => {
     if (e.target.className !== 'aa-stage') {
       return;
@@ -108,6 +139,7 @@ const EditingCanvas: React.FC = () => {
   // TODO: rename first param to partId
   const handlePartConfigure = async (part: any, context: any) => {
     /* console.log('[handlePartConfigure]', { part, context }); */
+    dispatch(setCurrentPartPropertyFocus({ focus: false }));
     const { fullscreen = false } = context;
     setConfigModalFullscreen(fullscreen);
     setConfigPartId(part);
@@ -123,6 +155,7 @@ const EditingCanvas: React.FC = () => {
 
   const handlePartSaveConfigure = async (partId: string) => {
     /* console.log('[handlePartSaveConfigure]', { partId }); */
+    dispatch(setCurrentPartPropertyFocus({ focus: true }));
   };
 
   // console.log('EC: RENDER', { layers });
@@ -158,6 +191,7 @@ const EditingCanvas: React.FC = () => {
       } else if (!_currentPartPropertyFocus) {
         //if user first copies a part and then before pasting it, if they click on the properties and do a cntrl+c, we need to clear the existing cntrl+c for part
         dispatch(setCopiedPart({ copiedPart: null }));
+        dispatch(setCopiedPartActivityId({ copiedPartActivityId: null }));
       }
     },
     ['KeyC'],
@@ -169,7 +203,7 @@ const EditingCanvas: React.FC = () => {
 
   return (
     <React.Fragment>
-      <section className="aa-stage" onClick={handleStageClick}>
+      <section className={`aa-stage mt-8 ${customInterfaceSettings}`} onClick={handleStageClick}>
         <StagePan>
           {currentActivityTree &&
             currentActivityTree.map((activity) => (

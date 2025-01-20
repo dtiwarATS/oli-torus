@@ -2,7 +2,7 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
   use OliWeb, :live_view
 
   import OliWeb.Delivery.Student.Utils,
-    only: [page_header: 1]
+    only: [page_header: 1, page_terms: 1, is_adaptive_page: 1]
 
   alias Oli.Accounts.User
   alias Oli.Delivery.Attempts.Core.ResourceAttempt
@@ -18,7 +18,6 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
 
   require Logger
 
-  on_mount {OliWeb.LiveSessionPlugs.InitPage, :init_context_state}
   on_mount {OliWeb.LiveSessionPlugs.InitPage, :previous_next_index}
 
   # this is an optimization to reduce the memory footprint of the liveview process
@@ -44,7 +43,9 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
        selected_view: params["selected_view"],
        password: page_context.effective_settings.password,
        page_revision: page_context.page,
-       effective_settings: page_context.effective_settings
+       effective_settings: page_context.effective_settings,
+       view: :prologue,
+       scripts_loaded: true
      )
      |> slim_assigns(), temporary_assigns: [page_context: %{}]}
   end
@@ -96,8 +97,13 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
           index={@current_page["index"]}
           container_label={Utils.get_container_label(@current_page["id"], @section)}
         />
-        <div class="self-stretch h-[0px] opacity-80 dark:opacity-20 bg-white border border-gray-200 mb-10">
+        <div class="self-stretch h-[0px] opacity-80 dark:opacity-20 bg-white border border-gray-200 mt-3 mb-10">
         </div>
+        <.page_terms
+          effective_settings={@page_context.effective_settings}
+          ctx={@ctx}
+          is_adaptive={is_adaptive_page(@page_context.page)}
+        />
         <.attempts_summary
           page_context={@page_context}
           attempt_message={@attempt_message}
@@ -105,7 +111,6 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
           allow_attempt?={@allow_attempt?}
           section_slug={@section.slug}
           request_path={@request_path}
-          adaptive_chromeless?={@view == :adaptive_chromeless}
         />
       </div>
     </div>
@@ -133,7 +138,6 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
   attr :page_context, Oli.Delivery.Page.PageContext
   attr :ctx, OliWeb.Common.SessionContext
   attr :allow_attempt?, :boolean
-  attr :adaptive_chromeless?, :boolean
   attr :section_slug, :string
   attr :request_path, :string
 
@@ -170,12 +174,10 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
           ctx={@ctx}
           allow_review_submission?={@page_context.effective_settings.review_submission == :allow}
           request_path={@request_path}
-          adaptive_chromeless?={@adaptive_chromeless?}
         />
       </div>
     </div>
     <button
-      :if={@page_context.progress_state == :not_started}
       id="begin_attempt_button"
       disabled={!@allow_attempt?}
       phx-click={
@@ -200,7 +202,6 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
   attr :allow_review_submission?, :boolean
   attr :section_slug, :string
   attr :page_revision_slug, :string
-  attr :adaptive_chromeless?, :boolean
   attr :request_path, :string
 
   defp attempt_summary(assigns) do
@@ -264,7 +265,10 @@ defmodule OliWeb.Delivery.Student.PrologueLive do
                 @section_slug,
                 @page_revision_slug,
                 @attempt.attempt_guid,
-                request_path: @request_path
+                request_path:
+                  Utils.prologue_live_path(@section_slug, @page_revision_slug,
+                    request_path: @request_path
+                  )
               )
             }
             role="review_attempt_link"

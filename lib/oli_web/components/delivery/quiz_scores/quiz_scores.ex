@@ -111,6 +111,7 @@ defmodule OliWeb.Components.Delivery.QuizScores do
             page_change={JS.push("paged_table_page_change", target: @myself)}
             limit_change={JS.push("paged_table_limit_change", target: @myself)}
             show_limit_change={true}
+            overflow_class="block scrollbar"
           />
         <% else %>
           <h6 class="text-center py-4">There are no quiz scores to show</h6>
@@ -166,9 +167,7 @@ defmodule OliWeb.Components.Delivery.QuizScores do
         }
       )
 
-    graded_pages =
-      Oli.Publishing.DeliveryResolver.graded_pages_revisions_and_section_resources(section.slug)
-      |> Enum.map(fn {rev, _sr} -> rev end)
+    graded_pages = Oli.Delivery.Sections.SectionResourceDepot.graded_pages(section.id)
 
     resource_accesses = fetch_resource_accesses(enrollments, section)
 

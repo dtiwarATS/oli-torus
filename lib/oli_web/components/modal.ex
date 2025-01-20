@@ -28,6 +28,7 @@ defmodule OliWeb.Components.Modal do
   """
   attr :id, :string, required: true
   attr :class, :string, default: ""
+  attr :header_class, :string, default: "flex items-start justify-between p-4"
   attr :body_class, :string, default: "p-6 space-y-6"
   attr :show, :boolean, default: false
   attr :on_cancel, JS, default: %JS{}
@@ -38,6 +39,7 @@ defmodule OliWeb.Components.Modal do
   slot :subtitle
   slot :confirm
   slot :cancel
+  slot :custom_footer
 
   def modal(assigns) do
     ~H"""
@@ -71,7 +73,7 @@ defmodule OliWeb.Components.Modal do
               class="hidden relative bg-white dark:bg-body-dark shadow-lg shadow-zinc-700/10 ring-1 ring-zinc-700/10 transition"
             >
               <!-- Modal header -->
-              <div class="flex items-start justify-between p-4">
+              <div class={@header_class}>
                 <div>
                   <div :if={@title != []}>
                     <h1
@@ -118,6 +120,7 @@ defmodule OliWeb.Components.Modal do
                 <%= render_slot(@inner_block) %>
               </div>
               <!-- Modal footer -->
+              <%= render_slot(@custom_footer) %>
               <div :if={@confirm != [] or @cancel != []}>
                 <div class="flex justify-end p-6 space-x-2">
                   <.button

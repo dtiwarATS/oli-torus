@@ -1314,7 +1314,7 @@ defmodule Oli.Delivery.SectionsTest do
                    ]}
                 ]}
              ] =
-               Sections.get_ordered_schedule(section, student1.id)
+               Sections.get_ordered_schedule(section, student1.id, nil)
     end
   end
 
@@ -1417,7 +1417,7 @@ defmodule Oli.Delivery.SectionsTest do
                  }
                ]
              } =
-               Sections.get_not_scheduled_agenda(section, student1.id)
+               Sections.get_not_scheduled_agenda(section, nil, student1.id)
 
       # verify that the resources are sorted by hierarchy (numbering index)
       assert [
@@ -2083,7 +2083,7 @@ defmodule Oli.Delivery.SectionsTest do
     setup [:create_elixir_project]
 
     test "fetches and orders containers by numbering level", %{section: section} = context do
-      result = Sections.get_ordered_containers_per_page(section.slug)
+      result = Sections.get_ordered_containers_per_page(section)
       # There are exactly 4 pages
       assert length(result) == 4
 
@@ -2129,7 +2129,7 @@ defmodule Oli.Delivery.SectionsTest do
 
     test "fetches only specified page ids",
          %{section: section, page_1: page_1} = context do
-      result = Sections.get_ordered_containers_per_page(section.slug, [page_1.resource_id])
+      result = Sections.get_ordered_containers_per_page(section, [page_1.resource_id])
       assert length(result) == 1
 
       # Only Page 1 is returned
@@ -2154,10 +2154,6 @@ defmodule Oli.Delivery.SectionsTest do
         refute Enum.member?(result, fn pc -> pc[:page_id] == page.resource_id end)
       end
     end
-
-    test "returns an empty list for non-existent sections", %{section: _section} do
-      assert Sections.get_ordered_containers_per_page("non-existent-section") == []
-    end
   end
 
   describe "container_titles/1" do
@@ -2167,22 +2163,13 @@ defmodule Oli.Delivery.SectionsTest do
       section: section,
       module_1: module_1,
       module_2: module_2,
-      unit_1: unit_1,
-      container_revision: root_container
+      unit_1: unit_1
     } do
-      expected_map = %{
-        root_container.resource_id => root_container.title,
-        unit_1.resource_id => unit_1.title,
-        module_1.resource_id => module_1.title,
-        module_2.resource_id => module_2.title
-      }
+      result = Sections.container_titles(section)
 
-      result = Sections.container_titles(section.slug)
-      assert result == expected_map
-    end
-
-    test "returns an empty map when there are no container resources" do
-      assert Sections.container_titles("non-existent-section") == %{}
+      assert Map.get(result, unit_1.resource_id) == unit_1.title
+      assert Map.get(result, module_1.resource_id) == module_1.title
+      assert Map.get(result, module_2.resource_id) == module_2.title
     end
   end
 
@@ -2343,6 +2330,201 @@ defmodule Oli.Delivery.SectionsTest do
 
     test "returns an empty list when there are no sections containing resources of the given project" do
       assert Sections.get_sections_containing_resources_of_given_project(-1) == []
+    end
+  end
+
+  describe "list_user_open_and_free_sections/1" do
+    test "lists the courses the user is enrolled to, sorted by enrollment date descending" do
+      user = insert(:user)
+
+      # Create sections
+      section_1 = insert(:section, title: "Elixir", open_and_free: true)
+      section_2 = insert(:section, title: "Phoenix", open_and_free: true)
+      section_3 = insert(:section, title: "LiveView", open_and_free: true)
+
+      # Enroll user to sections in a different order as sections were created
+      insert(:enrollment, %{
+        section: section_2,
+        user: user,
+        inserted_at: ~U[2023-01-01 00:00:00Z],
+        updated_at: ~U[2023-01-01 00:00:00Z]
+      })
+
+      insert(:enrollment, %{
+        section: section_3,
+        user: user,
+        inserted_at: ~U[2023-01-02 00:00:00Z],
+        updated_at: ~U[2023-01-02 00:00:00Z]
+      })
+
+      insert(:enrollment, %{
+        section: section_1,
+        user: user,
+        inserted_at: ~U[2023-01-03 00:00:00Z],
+        updated_at: ~U[2023-01-03 00:00:00Z]
+      })
+
+      # function returns sections sorted by enrollment date descending
+      [s1, s3, s2] = Sections.list_user_open_and_free_sections(user)
+
+      assert s1.title == "Elixir"
+      assert s3.title == "LiveView"
+      assert s2.title == "Phoenix"
+    end
+
+    test "retrieve open_and_free active sections by roles" do
+      user = insert(:user)
+
+      # Create sections
+      section_1 = insert(:section, title: "Elixir", open_and_free: true, status: :active)
+      section_2 = insert(:section, title: "Phoenix", open_and_free: true, status: :active)
+      section_3 = insert(:section, title: "LiveView", open_and_free: true, status: :archived)
+
+      Sections.enroll(user.id, section_1.id, [
+        Lti_1p3.Tool.ContextRoles.get_role(:context_instructor)
+      ])
+
+      Sections.enroll(user.id, section_2.id, [
+        Lti_1p3.Tool.ContextRoles.get_role(:context_learner)
+      ])
+
+      Sections.enroll(user.id, section_3.id, [
+        Lti_1p3.Tool.ContextRoles.get_role(:context_learner)
+      ])
+
+      sections =
+        Sections.get_open_and_free_active_sections_by_roles(user.id, [
+          Lti_1p3.Tool.ContextRoles.get_role(:context_learner),
+          Lti_1p3.Tool.ContextRoles.get_role(:context_instructor)
+        ])
+
+      assert length(sections) == 2
+      section_ids = Enum.map(sections, & &1.id)
+      assert section_1.id in section_ids
+      assert section_2.id in section_ids
+    end
+  end
+
+  describe "get_enrollment/2" do
+    test "returns the enrollment for the specified section and user when the status is :enrolled" do
+      user = insert(:user)
+      section = insert(:section)
+
+      insert(:enrollment, %{
+        user: user,
+        section: section,
+        status: :enrolled
+      })
+
+      enrollment = Sections.get_enrollment(section.slug, user.id)
+      assert enrollment.status == :enrolled
+      assert enrollment.section_id == section.id
+      assert enrollment.user_id == user.id
+
+      # enrolments with status different than :enrolled are not returned
+      user_2 = insert(:user)
+
+      insert(:enrollment, %{
+        user: user_2,
+        section: section,
+        status: :pending_confirmation
+      })
+
+      refute Sections.get_enrollment(section.slug, user_2.id)
+    end
+
+    test "returns the enrollment for the specified section when the opts is filter_by_status = false" do
+      user = insert(:user)
+      section = insert(:section)
+
+      insert(:enrollment, %{
+        user: user,
+        section: section,
+        status: :enrolled
+      })
+
+      enrollment = Sections.get_enrollment(section.slug, user.id, filter_by_status: false)
+      assert enrollment.status == :enrolled
+      assert enrollment.section_id == section.id
+      assert enrollment.user_id == user.id
+
+      user_2 = insert(:user)
+
+      insert(:enrollment, %{
+        user: user_2,
+        section: section,
+        status: :pending_confirmation
+      })
+
+      enrollment_2 = Sections.get_enrollment(section.slug, user_2.id, filter_by_status: false)
+      assert enrollment_2.status == :pending_confirmation
+      assert enrollment_2.section_id == section.id
+      assert enrollment_2.user_id == user_2.id
+    end
+  end
+
+  describe "enroll/3" do
+    test "enrolls a list of users to a section with the specified roles and status :enrolled by default" do
+      user_1 = insert(:user)
+      user_2 = insert(:user)
+      section = insert(:section)
+
+      Sections.enroll([user_1.id, user_2.id], section.id, [
+        ContextRoles.get_role(:context_learner)
+      ])
+
+      user_1_enrollment =
+        Sections.get_enrollment(section.slug, user_1.id) |> Oli.Repo.preload(:context_roles)
+
+      user_2_enrollment =
+        Sections.get_enrollment(section.slug, user_2.id) |> Oli.Repo.preload(:context_roles)
+
+      assert user_1_enrollment.status == :enrolled
+      assert user_1_enrollment.section_id == section.id
+
+      assert hd(user_2_enrollment.context_roles).uri ==
+               "http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"
+
+      assert user_2_enrollment.status == :enrolled
+      assert user_2_enrollment.section_id == section.id
+
+      assert hd(user_2_enrollment.context_roles).uri ==
+               "http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"
+    end
+  end
+
+  describe "enroll/4" do
+    test "enrolls a list of users to a section with the specified roles and defined status" do
+      user_1 = insert(:user)
+      user_2 = insert(:user)
+      section = insert(:section)
+
+      Sections.enroll(
+        [user_1.id, user_2.id],
+        section.id,
+        [ContextRoles.get_role(:context_learner)],
+        :pending_confirmation
+      )
+
+      user_1_enrollment =
+        Sections.get_enrollment(section.slug, user_1.id, filter_by_status: false)
+        |> Oli.Repo.preload(:context_roles)
+
+      user_2_enrollment =
+        Sections.get_enrollment(section.slug, user_2.id, filter_by_status: false)
+        |> Oli.Repo.preload(:context_roles)
+
+      assert user_1_enrollment.status == :pending_confirmation
+      assert user_1_enrollment.section_id == section.id
+
+      assert hd(user_2_enrollment.context_roles).uri ==
+               "http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"
+
+      assert user_2_enrollment.status == :pending_confirmation
+      assert user_2_enrollment.section_id == section.id
+
+      assert hd(user_2_enrollment.context_roles).uri ==
+               "http://purl.imsglobal.org/vocab/lis/v2/membership#Learner"
     end
   end
 end

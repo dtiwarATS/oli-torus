@@ -20,24 +20,12 @@ defmodule OliWeb.Delivery.InstructorDashboard.LearningObjectivesTabTest do
     )
   end
 
-  defp set_snapshot(section, resource, objective, user, result) do
-    insert(:snapshot, %{
-      section: section,
-      resource: resource,
-      user: user,
-      correct: result,
-      objective: objective,
-      attempt_number: 1,
-      part_attempt_number: 1
-    })
-  end
-
   describe "user" do
     test "can not access page when it is not logged in", %{conn: conn} do
       section = insert(:section)
 
       redirect_path =
-        "/session/new?request_path=%2Fsections%2F#{section.slug}%2Finstructor_dashboard%2Finsights%2Flearning_objectives"
+        "/users/log_in"
 
       assert {:error, {:redirect, %{to: ^redirect_path}}} =
                live(conn, live_view_learning_objectives_route(section.slug))
@@ -205,6 +193,28 @@ defmodule OliWeb.Delivery.InstructorDashboard.LearningObjectivesTabTest do
       refute has_element?(view, "span", "#{obj_revision_1.title}")
       assert has_element?(view, "span", "#{obj_revision_2.title}")
     end
+
+    test "display proficiency distribution", %{
+      conn: conn,
+      instructor: instructor,
+      section: section,
+      obj_revision_1: obj_revision_1,
+      obj_revision_2: obj_revision_2
+    } do
+      Sections.enroll(instructor.id, section.id, [ContextRoles.get_role(:context_instructor)])
+      Sections.update_section(section, %{v25_migration: :not_started})
+      {:ok, view, _html} = live(conn, live_view_learning_objectives_route(section.slug))
+
+      assert has_element?(
+               view,
+               "#proficiency-data-bar-chart-for-objective-#{obj_revision_1.resource_id}"
+             )
+
+      assert has_element?(
+               view,
+               "#proficiency-data-bar-chart-for-objective-#{obj_revision_2.resource_id}"
+             )
+    end
   end
 
   describe "objectives filtering" do
@@ -304,7 +314,6 @@ defmodule OliWeb.Delivery.InstructorDashboard.LearningObjectivesTabTest do
       assert has_element?(view, "span", "#{revisions.obj_revision_a.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_b.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_c.title}")
-      assert has_element?(view, "div", "#{revisions.obj_revision_c1.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_d.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_e.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_f.title}")
@@ -347,110 +356,6 @@ defmodule OliWeb.Delivery.InstructorDashboard.LearningObjectivesTabTest do
       assert has_element?(view, "span", "#{revisions.obj_revision_b.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_c.title}")
     end
-
-    test "cards to filter works correctly", %{
-      conn: conn,
-      instructor: instructor,
-      section: section,
-      resources: %{
-        page_resource_1: page_resource_1,
-        obj_resource_a: obj_resource_a,
-        obj_resource_b: obj_resource_b
-      },
-      revisions: %{
-        obj_revision_a: obj_revision_a,
-        obj_revision_b: obj_revision_b,
-        obj_revision_c: obj_revision_c
-      }
-    } do
-      student_1 = insert(:user)
-      Sections.enroll(student_1.id, section.id, [ContextRoles.get_role(:context_learner)])
-      Sections.enroll(instructor.id, section.id, [ContextRoles.get_role(:context_instructor)])
-
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, true)
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, false)
-
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, true)
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, false)
-
-      {:ok, view, _html} = live(conn, live_view_learning_objectives_route(section.slug))
-
-      assert has_element?(view, "span", "#{obj_revision_a.title}")
-      assert has_element?(view, "span", "#{obj_revision_b.title}")
-      assert has_element?(view, "span", "#{obj_revision_c.title}")
-
-      # ## Filtering by Low Proficiency Outcomes card
-      element(view, "div[phx-value-selected=\"low_proficiency_outcomes\"]") |> render_click()
-
-      assert has_element?(view, "span", "#{obj_revision_a.title}")
-      assert has_element?(view, "span", "#{obj_revision_b.title}")
-      refute has_element?(view, "span", "#{obj_revision_c.title}")
-
-      # ## Deactivating Low Proficiency Outcomes card
-      element(view, "div[phx-value-selected=\"low_proficiency_outcomes\"]") |> render_click()
-
-      assert has_element?(view, "span", "#{obj_revision_a.title}")
-      assert has_element?(view, "span", "#{obj_revision_b.title}")
-      assert has_element?(view, "span", "#{obj_revision_c.title}")
-
-      # ## Filtering by Low Proficiency Skills card
-      element(view, "div[phx-value-selected=\"low_proficiency_skills\"]") |> render_click()
-
-      assert has_element?(view, "h6", "There are no objectives to show")
-    end
-
-    test "cards to filter works correctly combined with input search", %{
-      conn: conn,
-      instructor: instructor,
-      section: section,
-      resources: %{
-        page_resource_1: page_resource_1,
-        obj_resource_a: obj_resource_a,
-        obj_resource_b: obj_resource_b
-      },
-      revisions: %{
-        obj_revision_a: obj_revision_a,
-        obj_revision_b: obj_revision_b,
-        obj_revision_c: obj_revision_c
-      }
-    } do
-      student_1 = insert(:user)
-      Sections.enroll(student_1.id, section.id, [ContextRoles.get_role(:context_learner)])
-      Sections.enroll(instructor.id, section.id, [ContextRoles.get_role(:context_instructor)])
-
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, true)
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_a, student_1, false)
-
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, true)
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, false)
-      set_snapshot(section, page_resource_1, obj_resource_b, student_1, false)
-
-      {:ok, view, _html} = live(conn, live_view_learning_objectives_route(section.slug))
-
-      ## Filtering by Low Proficiency Outcomes card
-      element(view, "div[phx-value-selected=\"low_proficiency_outcomes\"]") |> render_click()
-
-      assert has_element?(view, "span", "#{obj_revision_a.title}")
-      assert has_element?(view, "span", "#{obj_revision_b.title}")
-      refute has_element?(view, "span", "#{obj_revision_c.title}")
-
-      ## Search for "Objetive A" string
-      view
-      |> element("form[phx-change=\"search_objective\"]")
-      |> render_change(%{objective_name: "Objective A"})
-
-      ## Checks that only Objective A is displayed
-      assert has_element?(view, "span", "#{obj_revision_a.title}")
-      refute has_element?(view, "span", "#{obj_revision_b.title}")
-      refute has_element?(view, "span", "#{obj_revision_c.title}")
-    end
   end
 
   describe "page size change" do
@@ -469,7 +374,6 @@ defmodule OliWeb.Delivery.InstructorDashboard.LearningObjectivesTabTest do
       {:ok, view, _html} = live(conn, live_view_learning_objectives_route(section.slug))
 
       assert has_element?(view, "span", "#{revisions.obj_revision_c.title}")
-      assert has_element?(view, "div", "#{revisions.obj_revision_c1.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_d.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_e.title}")
       assert has_element?(view, "span", "#{revisions.obj_revision_f.title}")

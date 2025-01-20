@@ -66,6 +66,7 @@ export interface ActivityContext {
   variables: any;
   reviewMode?: boolean;
   pageLinkParams: any;
+  allowHints: boolean;
 }
 
 /**

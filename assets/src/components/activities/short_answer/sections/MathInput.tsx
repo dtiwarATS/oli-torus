@@ -14,9 +14,7 @@ export const MathInput: React.FC<MathInputProps> = ({ input, onEditInput }) => {
     <div className="mb-2">
       <MathLive
         value={input.value}
-        options={{
-          readOnly: !editMode,
-        }}
+        options={{ readOnly: !editMode }}
         onChange={(latex: string) => onEditInput({ ...input, value: latex, operator: 'equals' })}
       />
     </div>

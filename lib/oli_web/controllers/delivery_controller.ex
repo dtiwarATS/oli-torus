@@ -4,7 +4,7 @@ defmodule OliWeb.DeliveryController do
 
   alias Lti_1p3.Tool.{PlatformRoles, ContextRoles}
   alias Oli.Accounts
-  alias Oli.Accounts.{User, Author}
+  alias Oli.Accounts.{User}
   alias Oli.Analytics.DataTables.DataTable
   alias Oli.Delivery
   alias Oli.Delivery.Sections
@@ -14,6 +14,7 @@ defmodule OliWeb.DeliveryController do
   alias Oli.Lti.LtiParams
   alias Oli.Repo
   alias Oli.Repo.{Paging, Sorting}
+  alias OliWeb.UserAuth
   alias OliWeb.Common.Params
   alias OliWeb.Delivery.InstructorDashboard.Helpers
 
@@ -26,62 +27,63 @@ defmodule OliWeb.DeliveryController do
     ContextRoles.get_role(:context_instructor)
   ]
 
-  plug(Oli.Plugs.RegistrationCaptcha when action in [:process_create_and_link_account_user])
+  @doc """
+  This is the default entry point for delivery users. It will redirect to the appropriate page based
+  on whether the user is an independent learner or an LTI user.
 
-  def instructor_dashboard(conn, %{"section_slug" => section_slug}) do
-    # redirect to live view
-    redirect(conn,
-      to:
-        Routes.live_path(
-          conn,
-          OliWeb.Delivery.InstructorDashboard.InstructorDashboardLive,
-          section_slug,
-          "overview"
-        )
-    )
-  end
+  If the user is an independent learner, they will be redirected to the student workspace.
 
+  If the user is an LTI user, the user's roles will be checked to determine if they are allowed to
+  configure the section. If they are allowed to configure the section, they will be redirected to
+  the instructor dashboard. If they are not allowed to configure the section, the student will be
+  redirected to the page delivery.
+  """
   def index(conn, _params) do
     user = conn.assigns.current_user
-    lti_params = conn.assigns.lti_params
 
-    lti_roles = lti_params["https://purl.imsglobal.org/spec/lti/claim/roles"]
-    context_roles = ContextRoles.get_roles_by_uris(lti_roles)
-    platform_roles = PlatformRoles.get_roles_by_uris(lti_roles)
-    roles = MapSet.new(context_roles ++ platform_roles)
-    allow_configure_section_roles = MapSet.new(@allow_configure_section_roles)
+    if user.independent_learner do
+      redirect(conn, to: ~p"/workspaces/student")
+    else
+      user = Accounts.load_lti_params(user)
+      lti_params = user.lti_params.params
 
-    # allow section configuration if user has any of the allowed roles
-    allow_configure_section =
-      MapSet.intersection(roles, allow_configure_section_roles) |> MapSet.size() > 0
+      lti_roles = lti_params["https://purl.imsglobal.org/spec/lti/claim/roles"]
+      context_roles = ContextRoles.get_roles_by_uris(lti_roles)
+      platform_roles = PlatformRoles.get_roles_by_uris(lti_roles)
+      roles = MapSet.new(context_roles ++ platform_roles)
+      allow_configure_section_roles = MapSet.new(@allow_configure_section_roles)
 
-    section = Sections.get_section_from_lti_params(lti_params)
+      # allow section configuration if user has any of the allowed roles
+      allow_configure_section =
+        MapSet.intersection(roles, allow_configure_section_roles) |> MapSet.size() > 0
 
-    case section do
-      # author account has not been linked
-      nil when allow_configure_section ->
-        render_getting_started(conn)
+      section = Sections.get_section_from_lti_params(lti_params)
 
-      nil ->
-        render_course_not_configured(conn)
+      case section do
+        nil when allow_configure_section ->
+          render_getting_started(conn)
 
-      section when allow_configure_section ->
-        redirect_to_instructor_dashboard(conn, section)
+        nil ->
+          render_course_not_configured(conn)
 
-      # section has been configured
-      section ->
-        {institution, _registration, _deployment} =
-          Institutions.get_institution_registration_deployment(
-            lti_params["iss"],
-            LtiParams.peek_client_id(lti_params),
-            lti_params["https://purl.imsglobal.org/spec/lti/claim/deployment_id"]
-          )
+        section when allow_configure_section ->
+          redirect_to_instructor_dashboard(conn, section)
 
-        if institution.research_consent != :no_form and is_nil(user.research_opt_out) do
-          render_research_consent(conn, ~p"/sections/#{section.slug}")
-        else
-          redirect_to_page_delivery(conn, section)
-        end
+        # section has been configured
+        section ->
+          {institution, _registration, _deployment} =
+            Institutions.get_institution_registration_deployment(
+              lti_params["iss"],
+              LtiParams.peek_client_id(lti_params),
+              lti_params["https://purl.imsglobal.org/spec/lti/claim/deployment_id"]
+            )
+
+          if institution.research_consent != :no_form and is_nil(user.research_opt_out) do
+            render_research_consent(conn, institution, ~p"/sections/#{section.slug}")
+          else
+            redirect_to_page_delivery(conn, section)
+          end
+      end
     end
   end
 
@@ -93,7 +95,7 @@ defmodule OliWeb.DeliveryController do
     render(conn, "getting_started.html")
   end
 
-  defp render_research_consent(conn, redirect_url) do
+  defp render_research_consent(conn, institution, redirect_url) do
     case conn.assigns.current_user do
       nil ->
         conn
@@ -117,9 +119,6 @@ defmodule OliWeb.DeliveryController do
 
       # LTI users
       user ->
-        # check institution research consent setting
-        institution = Institutions.get_institution_by_lti_user(user)
-
         case institution do
           %Institution{research_consent: :oli_form} ->
             conn
@@ -146,7 +145,7 @@ defmodule OliWeb.DeliveryController do
 
   defp redirect_to_instructor_dashboard(conn, section) do
     redirect(conn,
-      to: ~p"/sections/#{section.slug}/instructor_dashboard/manage"
+      to: ~p"/sections/#{section.slug}/manage"
     )
   end
 
@@ -165,9 +164,11 @@ defmodule OliWeb.DeliveryController do
           ~p"/course"
       end
 
+    institution = Institutions.get_institution_by_lti_user(user)
+
     conn
     |> assign(:research_opt_out, user.research_opt_out)
-    |> render_research_consent(redirect_url)
+    |> render_research_consent(institution, redirect_url)
   end
 
   def research_consent(conn, %{"consent" => consent, "redirect_url" => redirect_url}) do
@@ -185,217 +186,9 @@ defmodule OliWeb.DeliveryController do
     end
   end
 
-  def link_account(conn, _params) do
-    # sign out current author account
-    conn
-    |> delete_pow_user(:author)
-    |> render_link_account_form()
-  end
-
-  def render_user_register_form(conn, changeset) do
-    # The learner/educator register form.
-    conn
-    |> assign(:changeset, changeset)
-    |> assign(:action, Routes.pow_registration_path(conn, :create))
-    |> assign(:sign_in_path, Routes.pow_session_path(conn, :new))
-    |> assign(:cancel_path, Routes.delivery_path(conn, :index))
-    |> Phoenix.Controller.put_view(OliWeb.Pow.RegistrationHTML)
-    |> Phoenix.Controller.render("new.html")
-  end
-
-  def render_link_account_form(conn, opts \\ []) do
-    title = Keyword.get(opts, :title, "Link Existing Account")
-    changeset = Keyword.get(opts, :changeset, Author.noauth_changeset(%Author{}))
-    action = Keyword.get(opts, :action, Routes.delivery_path(conn, :process_link_account_user))
-
-    create_account_path =
-      Keyword.get(
-        opts,
-        :create_account_path,
-        Routes.delivery_path(conn, :create_and_link_account)
-      )
-
-    cancel_path = Keyword.get(opts, :cancel_path, Routes.delivery_path(conn, :index))
-
-    conn
-    |> assign(:title, title)
-    |> assign(:changeset, changeset)
-    |> assign(:action, action)
-    |> assign(:create_account_path, create_account_path)
-    |> assign(:cancel_path, cancel_path)
-    |> assign(:link_account, true)
-    |> put_view(OliWeb.Pow.SessionHTML)
-    |> Phoenix.Controller.render("new.html")
-  end
-
-  def process_link_account_provider(conn, %{"provider" => provider}) do
-    conn =
-      conn
-      |> merge_assigns(
-        callback_url: Routes.authoring_delivery_url(conn, :link_account_callback, provider)
-      )
-
-    PowAssent.Plug.authorize_url(conn, provider, conn.assigns.callback_url)
-    |> case do
-      {:ok, url, conn} ->
-        conn
-        |> redirect(external: url)
-    end
-  end
-
-  def process_link_account_user(conn, %{"user" => author_params}) do
-    conn
-    |> use_pow_config(:author)
-    |> Pow.Plug.authenticate_user(author_params)
-    |> case do
-      {:ok, conn} ->
-        conn
-        |> put_flash(
-          :info,
-          Pow.Phoenix.Controller.messages(conn, Pow.Phoenix.Messages).signed_in(conn)
-        )
-        |> redirect(
-          to: Pow.Phoenix.Controller.routes(conn, Pow.Phoenix.Routes).after_sign_in_path(conn)
-        )
-
-      {:error, conn} ->
-        conn
-        |> put_flash(
-          :error,
-          Pow.Phoenix.Controller.messages(conn, Pow.Phoenix.Messages).invalid_credentials(conn)
-        )
-        |> render_link_account_form(
-          changeset: PowAssent.Plug.change_user(conn, %{}, author_params)
-        )
-    end
-  end
-
-  def link_account_callback(conn, %{"provider" => provider} = params) do
-    conn =
-      conn
-      |> merge_assigns(
-        callback_url: Routes.authoring_delivery_url(conn, :link_account_callback, provider)
-      )
-
-    PowAssent.Plug.callback_upsert(conn, provider, params, conn.assigns.callback_url)
-    |> (fn {:ok, conn} ->
-          %{current_user: current_user, current_author: current_author} = conn.assigns
-
-          conn =
-            case Accounts.link_user_author_account(current_user, current_author) do
-              {:ok, _user} ->
-                conn
-                |> put_flash(:info, "Account '#{current_author.email}' is now linked")
-
-              _ ->
-                conn
-                |> put_flash(
-                  :error,
-                  "Failed to link user and author accounts for '#{current_author.email}'"
-                )
-            end
-
-          {:ok, conn}
-        end).()
-    |> PowAssent.Phoenix.AuthorizationController.respond_callback()
-  end
-
-  def create_and_link_account(conn, _params) do
-    # sign out current author account
-    conn
-    |> delete_pow_user(:author)
-    |> render_create_and_link_form()
-  end
-
-  @spec process_create_and_link_account_user(Plug.Conn.t(), map()) :: Plug.Conn.t()
-  def process_create_and_link_account_user(conn, %{"user" => user_params}) do
-    %{current_user: current_user} = conn.assigns
-
-    conn
-    |> use_pow_config(:author)
-    |> Pow.Plug.create_user(user_params)
-    |> case do
-      {:ok, _user, conn} ->
-        conn
-        |> put_flash(
-          :info,
-          Pow.Phoenix.Controller.messages(conn, Pow.Phoenix.Messages).user_has_been_created(conn)
-        )
-
-        Pow.Phoenix.Controller.routes(conn, Pow.Phoenix.Routes).after_registration_path(conn)
-        conn = Pow.Plug.Session.do_delete(conn, get_pow_config(:author))
-
-        if current_user.independent_learner do
-          redirect(conn, to: ~p"/workspaces/student")
-        else
-          redirect(conn, to: Routes.delivery_path(conn, :index))
-        end
-
-      {:error, changeset, conn} ->
-        conn
-        |> render_create_and_link_form(changeset: changeset)
-    end
-  end
-
-  def render_author_register_form(conn, opts \\ []) do
-    # This is currently used when an author is registering, and they failed the captcha. They are sent here from
-    # Oli.Plugs.RegistrationCaptcha.render_captcha_error
-    changeset = Keyword.get(opts, :changeset, Author.noauth_changeset(%Author{}))
-
-    action =
-      Keyword.get(
-        opts,
-        :action,
-        Routes.authoring_pow_registration_path(conn, :create)
-      )
-
-    sign_in_path = Keyword.get(opts, :sign_in_path, Routes.authoring_pow_session_path(conn, :new))
-    cancel_path = Keyword.get(opts, :cancel_path, Routes.delivery_path(conn, :index))
-
-    conn
-    |> assign(:changeset, changeset)
-    |> assign(:action, action)
-    |> assign(:sign_in_path, sign_in_path)
-    |> assign(:cancel_path, cancel_path)
-    |> put_view(OliWeb.Pow.RegistrationHTML)
-    |> Phoenix.Controller.render("new.html")
-  end
-
-  def render_create_and_link_form(conn, opts \\ []) do
-    title = Keyword.get(opts, :title, "Create and Link Account")
-    changeset = Keyword.get(opts, :changeset, Author.noauth_changeset(%Author{}))
-
-    action =
-      Keyword.get(
-        opts,
-        :action,
-        Routes.delivery_path(conn, :process_create_and_link_account_user)
-      )
-
-    sign_in_path = Keyword.get(opts, :sign_in_path, Routes.delivery_path(conn, :link_account))
-    cancel_path = Keyword.get(opts, :cancel_path, Routes.delivery_path(conn, :index))
-
-    conn
-    |> assign(:title, title)
-    |> assign(:changeset, changeset)
-    |> assign(:action, action)
-    |> assign(:sign_in_path, sign_in_path)
-    |> assign(:cancel_path, cancel_path)
-    |> assign(:link_account, true)
-    |> put_view(OliWeb.Pow.RegistrationHTML)
-    |> Phoenix.Controller.render("new.html")
-  end
-
-  def signin(conn, %{"section" => section}) do
-    conn
-    |> delete_pow_user(:user)
-    |> redirect(to: Routes.pow_session_path(conn, :new, section: section))
-  end
-
-  def create_account(conn, %{"section" => section}) do
-    conn
-    |> delete_pow_user(:user)
-    |> redirect(to: Routes.pow_registration_path(conn, :new, section: section))
+  def link_account(_conn, _params) do
+    # MER-4104 TODO
+    throw("NOT IMPLEMENTED")
   end
 
   def show_enroll(conn, params) do
@@ -420,9 +213,19 @@ defmodule OliWeb.DeliveryController do
 
       # guest user cannot access courses that require enrollment
       {:redirect, nil} ->
+        params = [
+          section: section.slug,
+          from_invitation_link?: true,
+          request_path: ~p"/sections/#{section.slug}/enroll"
+        ]
+
         redirect(conn,
-          to: ~p"/?#{[section: section.slug, from_invitation_link?: from_invitation_link?]}"
+          to: ~p"/users/log_in?#{params}"
         )
+
+      # redirect to course index when user is not an independent learner (LTI user)
+      {:redirect, :non_independent_learner} ->
+        redirect(conn, to: Routes.delivery_path(conn, :index))
     end
   end
 
@@ -449,14 +252,14 @@ defmodule OliWeb.DeliveryController do
           )
 
           conn
-          |> create_pow_user(:user, user)
+          |> UserAuth.create_session(user)
           |> redirect(to: ~p"/sections/#{section.slug}")
         end
       else
         {:redirect, nil} ->
           # guest user cant access courses that require enrollment
           redirect_path =
-            "/session/new?request_path=#{Routes.delivery_path(conn, :show_enroll, conn.assigns.section.slug)}"
+            "/users/log_in?request_path=#{Routes.delivery_path(conn, :show_enroll, conn.assigns.section.slug)}"
 
           conn
           |> put_flash(
@@ -484,6 +287,9 @@ defmodule OliWeb.DeliveryController do
     case conn.assigns.current_user do
       nil ->
         if requires_enrollment, do: {:redirect, nil}, else: Accounts.create_guest_user()
+
+      %User{independent_learner: false} ->
+        {:redirect, :non_independent_learner}
 
       %User{guest: true} = guest ->
         if requires_enrollment, do: {:redirect, nil}, else: {:ok, guest}

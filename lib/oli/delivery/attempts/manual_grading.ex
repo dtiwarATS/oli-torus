@@ -19,22 +19,21 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
     ActivityAttempt
   }
 
-  def count_submitted_attempts(%Section{} = section) do
-    case browse_submitted_attempts(
-           section,
-           %Paging{limit: 1, offset: 0},
-           %Sorting{field: :date_submitted, direction: :asc},
-           %BrowseOptions{
-             user_id: nil,
-             activity_id: nil,
-             text_search: nil,
-             page_id: nil,
-             graded: nil
-           }
-         ) do
-      [] -> 0
-      [item] -> item.total_count
-    end
+  def has_submitted_attempts(%Section{id: section_id}) do
+    query =
+      ActivityAttempt
+      |> join(:left, [aa], resource_attempt in ResourceAttempt,
+        on: aa.resource_attempt_id == resource_attempt.id
+      )
+      |> join(:left, [_, resource_attempt], ra in ResourceAccess,
+        on: resource_attempt.resource_access_id == ra.id
+      )
+      |> where(
+        [aa, _resource_attempt, resource_access],
+        resource_access.section_id == ^section_id and aa.lifecycle_state == :submitted
+      )
+
+    Repo.exists?(query)
   end
 
   @doc """
@@ -254,13 +253,15 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
              finalize_part_attempts(activity_attempt, score_feedbacks_map),
            {:ok, _} <-
              Evaluate.rollup_part_attempt_evaluations(activity_attempt.attempt_guid),
-           {:ok, _} <-
-             to_attempt_guid(finalized_part_attempts)
-             |> Oli.Delivery.Snapshots.queue_or_create_snapshot(section_slug),
+           :ok <-
+             finalized_part_attempts
+             |> to_attempt_guid()
+             |> queue_or_create_snapshot(section_slug),
            {:ok, _} <- maybe_finalize_resource_attempt(section, graded, resource_attempt_guid) do
         finalized_part_attempts
       else
-        e -> Repo.rollback(e)
+        e ->
+          Repo.rollback(e)
       end
     end)
   end
@@ -367,5 +368,12 @@ defmodule Oli.Delivery.Attempts.ManualGrading do
     |> Enum.map(fn text ->
       %{type: "p", children: [%{text: text}]}
     end)
+  end
+
+  defp queue_or_create_snapshot(part_attempt_guids, section_slug) do
+    case Oli.Delivery.Snapshots.queue_or_create_snapshot(part_attempt_guids, section_slug) do
+      {:ok, _job} -> :ok
+      other -> other
+    end
   end
 end

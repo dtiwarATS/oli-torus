@@ -38,7 +38,7 @@ defmodule OliWeb.Delivery.StudentDashboard.StudentDashboardLiveTest do
       Sections.enroll(student.id, section.id, [ContextRoles.get_role(:context_learner)])
 
       redirect_path =
-        "/session/new?request_path=%2Fsections%2F#{section.slug}%2Fstudent_dashboard%2F#{student.id}%2Fcontent"
+        "/users/log_in"
 
       assert {:error, {:redirect, %{to: ^redirect_path}}} =
                live(conn, live_view_students_dashboard_route(section.slug, student.id))
@@ -129,6 +129,63 @@ defmodule OliWeb.Delivery.StudentDashboard.StudentDashboardLiveTest do
                ~s(<a href="/sections/#{section.slug}/instructor_dashboard/overview/students">Student reports</a>)
 
       assert html =~ ~s(#{student.name} information)
+    end
+
+    test "renders student progress calculation modal in the student overview view", %{
+      instructor: instructor,
+      section: section,
+      conn: conn
+    } do
+      Sections.enroll(instructor.id, section.id, [ContextRoles.get_role(:context_instructor)])
+
+      {:ok, view, _html} =
+        live(conn, ~p"/sections/#{section.slug}/instructor_dashboard/overview/students")
+
+      # Button that triggers a tooltip
+      assert has_element?(
+               view,
+               "button[xphx-mouseover='[[\"show\",{\"display\":\"flex\",\"to\":\"#student_progress_tooltip\"}]]']"
+             )
+
+      # Renders correct column title
+      assert has_element?(view, "th[phx-value-sort_by=\"progress\"]", "COURSE PROGRESS")
+
+      # Link that triggers the opening of the modal
+      assert view |> has_element?("button#student_progress_tooltip_link", "Learn more")
+
+      # Modal component for rendering the student progress calculation modal dialog
+      assert view |> has_element?("div#student_progress_calculation_modal")
+    end
+
+    test "renders student progress calculation modal in the student reports view", %{
+      instructor: instructor,
+      student: student,
+      section: section,
+      conn: conn
+    } do
+      Sections.enroll(instructor.id, section.id, [ContextRoles.get_role(:context_instructor)])
+
+      {:ok, view, _html} =
+        live(conn, live_view_students_dashboard_route(section.slug, student.id))
+
+      # Button that triggers a tooltip
+      assert has_element?(
+               view,
+               "button[xphx-mouseover='[[\"show\",{\"display\":\"flex\",\"to\":\"#student_progress_tooltip\"}]]']"
+             )
+
+      # Renders correct column title
+      assert has_element?(
+               view,
+               "th[phx-value-sort_by=\"student_completion\"]",
+               "STUDENT PROGRESS"
+             )
+
+      # Link that triggers the opening of the modal
+      assert view |> has_element?("button#student_progress_tooltip_link", "Learn more")
+
+      # Modal component for rendering the student progress calculation modal dialog
+      assert view |> has_element?("div#student_progress_calculation_modal")
     end
   end
 

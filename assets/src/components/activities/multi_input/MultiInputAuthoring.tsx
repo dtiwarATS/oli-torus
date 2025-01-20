@@ -47,6 +47,11 @@ export const MultiInputComponent = () => {
   const input = model.inputs.find((input) => input.id === selectedInputRef?.id);
   const index = model.inputs.findIndex((input) => input.id === selectedInputRef?.id);
 
+  const settings = [
+    shuffleAnswerChoiceSetting(model, dispatch, input),
+    changePerPartSubmission(model, dispatch),
+  ];
+
   return (
     <>
       <MultiInputStem
@@ -76,12 +81,7 @@ export const MultiInputComponent = () => {
               onEdit={(t) => dispatch(VariableActions.onUpdateTransformations(t))}
             />
           </TabbedNavigation.Tab>
-          <ActivitySettings
-            settings={[
-              shuffleAnswerChoiceSetting(model, dispatch, input),
-              changePerPartSubmission(model, dispatch),
-            ]}
-          />
+          <ActivitySettings settings={settings} />
         </TabbedNavigation.Tabs>
       ) : (
         'Select an input to edit it'

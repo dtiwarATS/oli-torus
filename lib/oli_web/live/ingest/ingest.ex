@@ -9,6 +9,9 @@ defmodule OliWeb.Admin.Ingest do
   alias OliWeb.Common.MonacoEditor
   alias OliWeb.Admin.Ingest.FAQ
 
+  on_mount {OliWeb.AuthorAuth, :ensure_authenticated}
+  on_mount OliWeb.LiveSessionPlugs.SetCtx
+
   defp set_breadcrumbs() do
     OliWeb.Admin.AdminView.breadcrumb()
     |> breadcrumb()
@@ -65,7 +68,7 @@ defmodule OliWeb.Admin.Ingest do
            ) do
       {:noreply,
        redirect(socket,
-         to: Routes.live_path(OliWeb.Endpoint, OliWeb.Projects.OverviewLive, project.slug)
+         to: ~s"workspaces/course_author/#{project.slug}/overview"
        )}
     else
       error ->

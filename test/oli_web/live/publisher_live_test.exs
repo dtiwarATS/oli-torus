@@ -24,13 +24,12 @@ defmodule OliWeb.PublisherLiveTest do
 
   describe "user cannot access when is not logged in" do
     test "redirects to new session when accessing the index view", %{conn: conn} do
-      {:error, {:redirect, %{to: "/authoring/session/new?request_path=%2Fadmin%2Fpublishers"}}} =
+      {:error, {:redirect, %{to: "/authors/log_in"}}} =
         live(conn, @live_view_index_route)
     end
 
     test "redirects to new session when accessing the create view", %{conn: conn} do
-      {:error,
-       {:redirect, %{to: "/authoring/session/new?request_path=%2Fadmin%2Fpublishers%2Fnew"}}} =
+      {:error, {:redirect, %{to: "/authors/log_in"}}} =
         live(conn, @live_view_new_route)
     end
 
@@ -38,7 +37,7 @@ defmodule OliWeb.PublisherLiveTest do
       publisher_id = insert(:publisher).id
 
       redirect_path =
-        "/authoring/session/new?request_path=%2Fadmin%2Fpublishers%2F#{publisher_id}"
+        "/authors/log_in"
 
       {:error, {:redirect, %{to: ^redirect_path}}} =
         live(conn, live_view_show_route(publisher_id))
@@ -51,13 +50,19 @@ defmodule OliWeb.PublisherLiveTest do
     test "returns forbidden when accessing the index view", %{conn: conn} do
       conn = get(conn, @live_view_index_route)
 
-      assert response(conn, 403)
+      assert redirected_to(conn) == ~p"/workspaces/course_author"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+               "You are not authorized to access this page."
     end
 
     test "returns forbidden when accessing the create view", %{conn: conn} do
       conn = get(conn, @live_view_new_route)
 
-      assert response(conn, 403)
+      assert redirected_to(conn) == ~p"/workspaces/course_author"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+               "You are not authorized to access this page."
     end
 
     test "returns forbidden when accessing the show view", %{conn: conn} do
@@ -65,7 +70,10 @@ defmodule OliWeb.PublisherLiveTest do
 
       conn = get(conn, live_view_show_route(publisher.id))
 
-      assert response(conn, 403)
+      assert redirected_to(conn) == ~p"/workspaces/course_author"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+               "You are not authorized to access this page."
     end
   end
 
@@ -130,6 +138,40 @@ defmodule OliWeb.PublisherLiveTest do
              |> element("tr:first-child > td:first-child")
              |> render() =~
                "Z Publisher"
+    end
+
+    test "applies sorting by created at", %{conn: conn} do
+      Oli.Inventories.Publisher
+      |> Oli.Repo.get_by!(email: "publisher@cmu.edu")
+      |> Oli.Repo.delete()
+
+      now = DateTime.utc_now()
+      two_months_later = DateTime.add(now, 60, :day)
+
+      insert(:publisher, %{name: "A Publisher", inserted_at: now})
+      insert(:publisher, %{name: "Z Publisher", inserted_at: two_months_later})
+
+      {:ok, view, _html} = live(conn, @live_view_index_route)
+
+      view
+      |> element("th[phx-click=\"sort\"]:first-of-type")
+      |> render_click(%{sort_by: "inserted_at"})
+
+      assert view |> element("tr:first-child > td:first-child") |> render() =~
+               "A Publisher"
+
+      assert view |> element("tr:last-child > td:first-child") |> render() =~
+               "Z Publisher"
+
+      view
+      |> element("th[phx-click=\"sort\"]:first-of-type")
+      |> render_click(%{sort_by: "inserted_at"})
+
+      assert view |> element("tr:first-child > td:first-child") |> render() =~
+               "Z Publisher"
+
+      assert view |> element("tr:last-child > td:first-child") |> render() =~
+               "A Publisher"
     end
 
     test "applies paging", %{conn: conn} do

@@ -1,18 +1,20 @@
 defmodule OliWeb.Components.Delivery.Students do
-  alias OliWeb.Common.InstructorDashboardPagedTable
   use OliWeb, :live_component
 
-  alias Phoenix.LiveView.JS
+  import OliWeb.Components.Delivery.Buttons, only: [instructor_dasboard_toggle_chevron: 1]
 
+  alias Lti_1p3.Tool.ContextRoles
   alias Oli.Accounts.{Author, User}
   alias Oli.Delivery.Metrics
   alias OliWeb.Common.{SearchInput, Params, Utils}
+  alias OliWeb.Common.InstructorDashboardPagedTable
   alias OliWeb.Components.Delivery.CardHighlights
-  alias OliWeb.Delivery.Sections.EnrollmentsTableModel
-  alias OliWeb.Router.Helpers, as: Routes
-  alias OliWeb.Icons
-  alias Lti_1p3.Tool.ContextRoles
   alias OliWeb.Delivery.Content.Progress
+  alias OliWeb.Delivery.InstructorDashboard.HTMLComponents
+  alias OliWeb.Delivery.Sections.EnrollmentsTableModel
+  alias OliWeb.Icons
+  alias OliWeb.Router.Helpers, as: Routes
+  alias Phoenix.LiveView.JS
 
   @default_params %{
     offset: 0,
@@ -284,6 +286,12 @@ defmodule OliWeb.Components.Delivery.Students do
             student.user_role_id != 4
         end)
 
+      :pending_confirmation ->
+        Enum.filter(students, fn student -> student.enrollment_status == :pending_confirmation end)
+
+      :rejected ->
+        Enum.filter(students, fn student -> student.enrollment_status == :rejected end)
+
       _ ->
         students
     end
@@ -318,7 +326,11 @@ defmodule OliWeb.Components.Delivery.Students do
         Enum.sort_by(students, fn student -> student.engagement end, sort_order)
 
       :payment_status ->
-        Enum.sort_by(students, fn student -> student.payment_status end, sort_order)
+        Enum.sort_by(
+          students,
+          &{&1.payment_status, &1.payment_date && DateTime.to_unix(&1.payment_date)},
+          sort_order
+        )
 
       _ ->
         Enum.sort_by(
@@ -526,7 +538,7 @@ defmodule OliWeb.Components.Delivery.Students do
           <% end %>
         </div>
 
-        <div class="flex gap-2 mx-9 my-4 ">
+        <div class="flex gap-2 mx-9 mt-4 mb-10 ">
           <form for="search" phx-target={@myself} phx-change="search_student" class="w-56">
             <SearchInput.render
               id="students_search_input"
@@ -572,6 +584,7 @@ defmodule OliWeb.Components.Delivery.Students do
           limit_change={JS.push("paged_table_limit_change", target: @myself)}
           show_limit_change={true}
         />
+        <HTMLComponents.view_example_student_progress_modal />
       </div>
     </div>
     """
@@ -614,14 +627,7 @@ defmodule OliWeb.Components.Delivery.Students do
             Proficiency is <%= show_proficiency_selected_values(@selected_values) %>
           </span>
         </div>
-        <div>
-          <div id={"#{@id}-down-icon"}>
-            <Icons.chevron_down />
-          </div>
-          <div class="hidden" id={"#{@id}-up-icon"}>
-            <Icons.chevron_down class="fill-blue-400 rotate-180" />
-          </div>
-        </div>
+        <.instructor_dasboard_toggle_chevron id={@id} map_values={@selected_values} />
       </div>
       <div class="relative">
         <div
@@ -647,7 +653,7 @@ defmodule OliWeb.Components.Delivery.Students do
                 label={option.name}
                 checked={option.id in @selected_proficiency_ids}
                 type="checkbox"
-                class_label="text-zinc-900 text-xs font-normal leading-none dark:text-white"
+                label_class="text-zinc-900 text-xs font-normal leading-none dark:text-white"
               />
             </.form>
           </div>
@@ -1216,7 +1222,16 @@ defmodule OliWeb.Components.Delivery.Students do
         Params.get_atom_param(
           params,
           "filter_by",
-          [:enrolled, :suspended, :paid, :not_paid, :grace_period, :non_students],
+          [
+            :enrolled,
+            :suspended,
+            :paid,
+            :not_paid,
+            :grace_period,
+            :non_students,
+            :pending_confirmation,
+            :rejected
+          ],
           @default_params.filter_by
         ),
       selected_card_value:

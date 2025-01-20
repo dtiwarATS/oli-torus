@@ -1,3 +1,4 @@
+import { Evaluation } from 'components/activities/common/delivery/evaluation/Evaluation';
 import { LikertReportRenderer } from 'components/activities/likert/reports/LikerReportRenderer';
 import { DeliveryElementRenderer } from 'components/common/DeliveryElementRenderer';
 import { ECLRepl } from 'components/common/ECLRepl';
@@ -20,8 +21,10 @@ import { globalStore } from 'state/store';
 import { VideoPlayer } from '../components/video_player/VideoPlayer';
 import { OfflineDetector } from './OfflineDetector';
 import ActivityBank from './bank/ActivityBank';
+import Bibliography from './bibliography/Bibliography';
 import { References } from './bibliography/References';
 
+registerApplication('Bibliography', Bibliography, globalStore);
 registerApplication('ModalDisplay', ModalDisplay, globalStore);
 registerApplication('DarkModeSelector', DarkModeSelector);
 registerApplication('PaginationControls', PaginationControls, globalStore);
@@ -43,3 +46,4 @@ registerApplication('RichTextEditor', RichTextEditor, globalStore);
 registerApplication('VegaLiteRenderer', VegaLiteRenderer, globalStore);
 registerApplication('LikertReportRenderer', LikertReportRenderer, globalStore);
 registerApplication('ActivityBank', ActivityBank, globalStore);
+registerApplication('Evaluation', Evaluation, globalStore);

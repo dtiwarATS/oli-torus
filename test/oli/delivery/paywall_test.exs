@@ -845,6 +845,44 @@ defmodule Oli.Delivery.PaywallTest do
     end
   end
 
+  describe "get_active_payment_for/2" do
+    setup do
+      section =
+        insert(:section, %{
+          type: :blueprint
+        })
+
+      user = insert(:user)
+      enrollment = insert(:enrollment, user: user, section: section)
+
+      payment =
+        insert(:payment, section: section, enrollment: enrollment)
+
+      %{section: section, enrollment: enrollment, payment: payment}
+    end
+
+    test "returns the active payment for the given enrollment and section", %{
+      section: section,
+      enrollment: enrollment,
+      payment: active_payment
+    } do
+      {:ok, payment} = Paywall.get_active_payment_for(enrollment.id, section.id)
+
+      assert payment.id == active_payment.id
+    end
+
+    test "returns an error if the payment was invalidated", %{
+      section: section,
+      enrollment: enrollment,
+      payment: active_payment
+    } do
+      Paywall.update_payment(active_payment, %{type: :invalidated})
+
+      assert Paywall.get_active_payment_for(enrollment.id, section.id) ==
+               {:error, :no_active_payment_found}
+    end
+  end
+
   describe "browse payments" do
     setup do
       product =
@@ -856,8 +894,8 @@ defmodule Oli.Delivery.PaywallTest do
     end
 
     test "browse_payments/4 applies paging", %{product: product} do
-      payment_1_id = insert(:payment, section: product, code: 123_456_789).id
-      _payment_2_id = insert(:payment, section: product, code: 987_654_321).id
+      payment_1_id = insert(:payment, section: product, code: 123_456_789, type: :bypass).id
+      _payment_2_id = insert(:payment, section: product, code: 987_654_321, type: :direct).id
 
       [%{payment: %Payment{id: ^payment_1_id}}] =
         Paywall.browse_payments(product.slug, %Paging{limit: 1, offset: 0}, %Sorting{

@@ -1,5 +1,6 @@
 defmodule OliWeb.Sections.SectionsTableModel do
   use Phoenix.Component
+  use OliWeb, :verified_routes
 
   alias OliWeb.Common.SessionContext
   alias OliWeb.Common.Table.{ColumnSpec, SortableTableModel}
@@ -75,17 +76,7 @@ defmodule OliWeb.Sections.SectionsTableModel do
     assigns = Map.merge(assigns, %{section: section})
 
     ~H"""
-    <a
-      href={
-        Routes.live_path(
-          OliWeb.Endpoint,
-          OliWeb.Delivery.InstructorDashboard.InstructorDashboardLive,
-          @section.slug,
-          :manage
-        )
-      }
-      target="_blank"
-    >
+    <a href={~p"/sections/#{@section.slug}/manage"} target="_blank">
       <%= @section.title %>
     </a>
     """
@@ -132,8 +123,7 @@ defmodule OliWeb.Sections.SectionsTableModel do
 
       SortableTableModel.render_link_column(assigns, section.blueprint.title, route_path)
     else
-      route_path =
-        Routes.live_path(OliWeb.Endpoint, OliWeb.Projects.OverviewLive, section.base_project.slug)
+      route_path = ~p"/workspaces/course_author/#{section.base_project.slug}/overview"
 
       SortableTableModel.render_link_column(assigns, section.base_project.title, route_path)
     end

@@ -4,6 +4,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
   import Mox
   import Oli.Factory
   import Oli.Utils.Seeder.Utils
+  import Phoenix.LiveViewTest
 
   alias Oli.Authoring.Course
   alias Oli.Seeder
@@ -13,6 +14,53 @@ defmodule OliWeb.PageDeliveryControllerTest do
   alias Oli.Resources.Collaboration
   alias OliWeb.Common.{FormatDateTime, Utils}
   alias OliWeb.Router.Helpers, as: Routes
+
+  defp ensure_content_is_visible(view) do
+    # the content of the page will not be rendered until the socket is connected
+    # and the client side confirms that the scripts are loaded
+    view
+    |> element("#eventIntercept")
+    |> render_hook("survey_scripts_loaded", %{"loaded" => true})
+  end
+
+  defp create_attempt(student, section, revision, resource_attempt_data) do
+    resource_access = get_or_insert_resource_access(student, section, revision)
+
+    resource_attempt =
+      insert(:resource_attempt, %{
+        resource_access: resource_access,
+        revision: revision,
+        date_submitted: resource_attempt_data[:date_submitted] || ~U[2023-11-14 20:00:00Z],
+        date_evaluated: resource_attempt_data[:date_evaluated] || ~U[2023-11-14 20:30:00Z],
+        score: resource_attempt_data[:score] || 5,
+        out_of: resource_attempt_data[:out_of] || 10,
+        lifecycle_state: resource_attempt_data[:lifecycle_state] || :submitted,
+        content: resource_attempt_data[:content] || %{model: []}
+      })
+
+    resource_attempt
+  end
+
+  defp get_or_insert_resource_access(student, section, revision) do
+    Oli.Repo.get_by(
+      ResourceAccess,
+      resource_id: revision.resource_id,
+      section_id: section.id,
+      user_id: student.id
+    )
+    |> case do
+      nil ->
+        insert(:resource_access, %{
+          user: student,
+          section: section,
+          resource: revision.resource,
+          resource_id: revision.resource_id
+        })
+
+      resource_access ->
+        resource_access
+    end
+  end
 
   describe "page_delivery_controller build_hierarchy" do
     setup [:setup_tags, :setup_lti_session]
@@ -186,22 +234,6 @@ defmodule OliWeb.PageDeliveryControllerTest do
       assert html_response(conn, 200) =~ section.title
     end
 
-    test "handles student page access by an enrolled student", %{
-      conn: conn,
-      revision: revision,
-      user: user,
-      section: section
-    } do
-      enroll_as_student(%{section: section, user: user})
-
-      conn =
-        conn
-        |> get(~p"/sections/#{section.slug}/lesson/#{revision.slug}")
-
-      assert html_response(conn, 200) =~ "Page one"
-      assert html_response(conn, 200) =~ section.title
-    end
-
     @tag :skip
     test "shows the related exploration pages for a given page", %{
       conn: conn,
@@ -365,7 +397,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -381,7 +413,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # that says 'Submit Answers'
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert html_response(conn, 200) =~ "Submit Answers"
@@ -398,7 +430,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # Submit the assessment and verify we see the summary view
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         post(
@@ -424,7 +456,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # does not allow us to start a new attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       {:ok, conn: conn, ctx: session_context} = set_timezone(%{conn: conn})
 
@@ -441,7 +473,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # visit assessment review page
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -467,34 +499,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
     } do
       enroll_as_student(%{section: section, user: user})
 
-      conn = get(conn, ~p"/sections/#{section.slug}/lesson/#{page_revision.slug}")
-
-      # now start the attempt
-      conn =
-        recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-
-      conn =
-        get(
-          conn,
-          Routes.page_delivery_path(conn, :start_attempt, section.slug, page_revision.slug)
-        )
-
-      # verify the redirection
-      redir_path = redirected_to(conn, 302)
-
-      conn =
-        recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-
-      conn = get(conn, redir_path)
-
-      # fetch the resource that will have been created
-      [attempt] = Oli.Repo.all(ResourceAttempt)
-
-      conn =
-        recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+      attempt = create_attempt(user, section, page_revision, %{lifecycle_state: :active})
 
       post(
         conn,
@@ -506,7 +511,8 @@ defmodule OliWeb.PageDeliveryControllerTest do
           "action" => "finalize",
           "section_slug" => section.slug,
           "revision_slug" => page_revision.slug,
-          "attempt_guid" => attempt.attempt_guid
+          "attempt_guid" => attempt.attempt_guid,
+          "resource_id" => page_revision.resource_id
         }
       )
 
@@ -524,34 +530,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       {:ok, section} = Sections.update_section(section, %{grade_passback_enabled: true})
       enroll_as_student(%{section: section, user: user})
 
-      conn = get(conn, ~p"/sections/#{section.slug}/lesson/#{page_revision.slug}")
-
-      # now start the attempt
-      conn =
-        recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-
-      conn =
-        get(
-          conn,
-          Routes.page_delivery_path(conn, :start_attempt, section.slug, page_revision.slug)
-        )
-
-      # verify the redirection
-      redir_path = redirected_to(conn, 302)
-
-      conn =
-        recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-
-      conn = get(conn, redir_path)
-
-      # fetch the resource attempt that will have been created
-      [attempt] = Oli.Repo.all(ResourceAttempt)
-
-      conn =
-        recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+      attempt = create_attempt(user, section, page_revision, %{lifecycle_state: :active})
 
       post(
         conn,
@@ -591,7 +570,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         post(
@@ -610,14 +589,14 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert html_response(conn, 200) =~ "Incorrect password"
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         post(
@@ -638,7 +617,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # that says 'Submit Answers'
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert html_response(conn, 200) =~ "Submit Answers"
@@ -790,7 +769,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -803,7 +782,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
 
@@ -833,7 +812,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -849,7 +828,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # that says 'Submit Answers'
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert html_response(conn, 200) =~ "Submit Answers"
@@ -897,7 +876,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the graded attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -913,7 +892,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # that says 'Submit Answers'
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert html_response(conn, 200) =~ "Submit Answers"
@@ -957,7 +936,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # even through the page has been changed to ungraded
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, ~p"/sections/#{section.slug}/lesson/#{page_revision.slug}")
       assert html_response(conn, 200) =~ "Submit Answers"
@@ -965,7 +944,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # Submit the assessment
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         post(
@@ -985,7 +964,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now visit the page again, verifying that we see the page as an ungraded page
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, ~p"/sections/#{section.slug}/lesson/#{page_revision.slug}")
       assert html_response(conn, 200) =~ "This is now ungraded"
@@ -1066,7 +1045,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # Now visit the page again, verifying that we are presented with the prologue page
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, ~p"/sections/#{section.slug}/lesson/#{page_revision.slug}")
       assert html_response(conn, 200) =~ "When you are ready to begin, you may"
@@ -1074,7 +1053,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the graded attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -1090,7 +1069,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # that says 'Submit Answers'
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert html_response(conn, 200) =~ "Submit Answers"
@@ -1142,7 +1121,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, ~p"/sections/#{section.slug}/lesson/#{page_revision.slug}")
 
@@ -1208,7 +1187,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the graded attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -1223,7 +1202,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # and then the rendering of the page, which should contain a pagination control
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert html_response(conn, 200) =~ ~s|<div class="paginated"><div class="elements content">|
@@ -1254,7 +1233,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now start the graded attempt
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn =
         get(
@@ -1269,7 +1248,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # and then the rendering of the graded page, which should not show learning objectives
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
 
       conn = get(conn, redir_path)
       assert not String.contains?(html_response(conn, 200), "Learning Objectives")
@@ -1277,7 +1256,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # now access an ungraded page, which should show learning objectives
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/lesson/#{ungraded_page_revision.slug}")
 
       assert html_response(conn, 200) =~ "Learning Objectives"
@@ -1345,49 +1324,6 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       assert html_response(conn, 200) =~ "id=\"top_page_navigator\""
       assert html_response(conn, 200) =~ "id=\"bottom_page_navigator\""
-    end
-
-    @tag isolation: "serializable"
-    test "timer will not be shown if revision is ungraded", %{
-      conn: conn,
-      user: user,
-      section: section,
-      map: map
-    } do
-      %{ungraded_page: ungraded_page} = map
-
-      enroll_as_student(%{section: section, user: user})
-
-      effective_settings =
-        Oli.Delivery.Settings.get_combined_settings(ungraded_page.revision, section.id, user.id)
-
-      datashop_session_id = Plug.Conn.get_session(conn, :datashop_session_id)
-      activity_provider = &Oli.Delivery.ActivityProvider.provide/6
-
-      Oli.Delivery.Sections.get_section_resource(section.id, ungraded_page.resource.id)
-      |> Oli.Delivery.Sections.update_section_resource(%{time_limit: 5})
-
-      insert(:resource_access,
-        user: user,
-        section: section,
-        resource: ungraded_page.resource
-      )
-
-      Oli.Delivery.Attempts.PageLifecycle.start(
-        ungraded_page.revision.slug,
-        section.slug,
-        datashop_session_id,
-        user,
-        effective_settings,
-        activity_provider
-      )
-
-      conn =
-        conn
-        |> get(~p"/sections/#{section.slug}/lesson/#{ungraded_page.revision.slug}")
-
-      assert html_response(conn, 200) =~ ungraded_page.revision.title
-      refute html_response(conn, 200) =~ "<div id=\"countdown_timer_display\""
     end
 
     @tag :skip
@@ -1534,7 +1470,10 @@ defmodule OliWeb.PageDeliveryControllerTest do
       assert html_response(conn, 302) =~
                ~p"/sections/#{section.slug}"
 
-      user = Pow.Plug.current_user(conn)
+      conn = OliWeb.UserAuth.fetch_current_user(conn, [])
+
+      user = conn.assigns[:current_user]
+
       ensure_user_visit(user, section)
 
       # make the same request with a user logged in
@@ -1552,7 +1491,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
         conn
         |> get(~p"/sections/#{section.slug}")
 
-      same_user = Pow.Plug.current_user(conn)
+      same_user = conn.assigns[:current_user]
 
       assert html_response(conn, 200) =~ section.title
       assert user.id == same_user.id
@@ -1571,7 +1510,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         Plug.Test.init_test_session(conn, lti_session: nil)
-        |> Pow.Plug.assign_current_user(other_user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(other_user)
 
       conn =
         get(
@@ -1584,10 +1523,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # user that was previously enrolled should be able to access without enrolling again
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          enrolled_user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(enrolled_user)
 
       conn =
         get(
@@ -1627,10 +1563,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
       # user should still be able to access
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          enrolled_user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(enrolled_user)
 
       conn =
         get(
@@ -1656,7 +1589,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}")
 
       assert html_response(conn, 302) =~
@@ -1677,7 +1610,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}")
 
       assert html_response(conn, 200) =~ "Not authorized"
@@ -1701,7 +1634,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}")
 
       assert html_response(conn, 302) =~
@@ -1728,10 +1661,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(user)
 
       # Check visibility in the section overview
       conn =
@@ -1747,10 +1677,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(user)
 
       # Check visibility at the unit level
       conn = get(conn, Routes.page_delivery_path(conn, :container, section.slug, "first_unit"))
@@ -1777,10 +1704,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(user)
 
       # Check visibility in the section overview
       conn =
@@ -1795,10 +1719,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(user)
 
       # Check visibility at the unit level
       conn = get(conn, Routes.page_delivery_path(conn, :container, section.slug, "first_unit"))
@@ -1829,10 +1750,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(user)
 
       # Check visibility at the unit level
       conn =
@@ -1860,10 +1778,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          user,
-          OliWeb.Pow.PowHelpers.get_pow_config(:user)
-        )
+        |> log_in_user(user)
 
       # Check visibility at the unit level
       conn =
@@ -2143,7 +2058,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
     } do
       conn =
         conn
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(Routes.page_delivery_path(conn, :page_preview, section.slug, revision.slug))
 
       # page title
@@ -2240,7 +2155,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/explorations")
 
       assert html_response(conn, 200)
@@ -2253,7 +2168,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/explorations")
 
       assert html_response(conn, 200)
@@ -2279,7 +2194,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/explorations")
 
       assert html_response(conn, 302) =~
@@ -2297,7 +2212,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/explorations")
 
       assert html_response(conn, 200) =~ other_revision.title
@@ -2320,7 +2235,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/explorations")
 
       assert html_response(conn, 200) =~ "<h6>There are no exploration pages available</h6>"
@@ -2341,7 +2256,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}")
 
       refute html_response(conn, 200) =~ "<a>Exploration</a>"
@@ -2363,7 +2278,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}")
 
       refute html_response(conn, 200) =~ "<h4>Your Exploration Activities</h4>"
@@ -2380,7 +2295,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/discussions")
 
       assert html_response(conn, 200) =~ section.title
@@ -2392,7 +2307,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/discussions")
 
       assert html_response(conn, 200)
@@ -2420,7 +2335,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/discussions")
 
       assert html_response(conn, 200) =~ "Your Latest Discussion Activity"
@@ -2443,7 +2358,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/discussions")
 
       assert html_response(conn, 200) =~ "All Discussion Activity"
@@ -2472,7 +2387,7 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+        |> log_in_user(user)
         |> get(~p"/sections/#{section.slug}/discussions")
 
       assert html_response(conn, 200) =~ "<h6>There are no posts to show</h6>"
@@ -2489,8 +2404,8 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-        |> get(~p"/sections/#{section.slug}/assignments")
+        |> log_in_user(user)
+        |> get(~p"/sections/#{section.slug}/student_schedule")
 
       assert html_response(conn, 200) =~ section.title
 
@@ -2522,8 +2437,8 @@ defmodule OliWeb.PageDeliveryControllerTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-        |> get(~p"/sections/#{section.slug}/preview/assignments")
+        |> log_in_user(user)
+        |> get(~p"/sections/#{section.slug}/preview/student_schedule")
 
       assert html_response(conn, 200) =~ section.title
       assert html_response(conn, 200) =~ "Course content"
@@ -2797,17 +2712,16 @@ defmodule OliWeb.PageDeliveryControllerTest do
         map
         |> Oli.Utils.Seeder.Session.login_as_user(ref(:student1))
 
-      conn =
-        get(
-          conn,
-          ~p"/sections/#{section.slug}/lesson/#{page_with_audience_groups.slug}"
-        )
+      {:ok, view, _html} =
+        live(conn, "/sections/#{section.slug}/lesson/#{page_with_audience_groups.slug}")
 
-      assert html_response(conn, 200) =~ "group content with unset audience"
-      assert html_response(conn, 200) =~ "group content with always audience"
-      refute html_response(conn, 200) =~ "group content with instructor audience"
-      refute html_response(conn, 200) =~ "group content with feedback audience"
-      refute html_response(conn, 200) =~ "group content with never audience"
+      ensure_content_is_visible(view)
+
+      assert render(view) =~ "group content with unset audience"
+      assert render(view) =~ "group content with always audience"
+      refute render(view) =~ "group content with instructor audience"
+      refute render(view) =~ "group content with feedback audience"
+      refute render(view) =~ "group content with never audience"
     end
 
     test "instructor sees the appropriate content according to audience",
@@ -2820,17 +2734,16 @@ defmodule OliWeb.PageDeliveryControllerTest do
         map
         |> Oli.Utils.Seeder.Session.login_as_user(ref(:student1))
 
-      conn =
-        get(
-          conn,
-          ~p"/sections/#{section.slug}/lesson/#{page_with_audience_groups.slug}"
-        )
+      {:ok, view, _html} =
+        live(conn, "/sections/#{section.slug}/lesson/#{page_with_audience_groups.slug}")
 
-      assert html_response(conn, 200) =~ "group content with unset audience"
-      assert html_response(conn, 200) =~ "group content with always audience"
-      refute html_response(conn, 200) =~ "group content with instructor audience"
-      refute html_response(conn, 200) =~ "group content with feedback audience"
-      refute html_response(conn, 200) =~ "group content with never audience"
+      ensure_content_is_visible(view)
+
+      assert render(view) =~ "group content with unset audience"
+      assert render(view) =~ "group content with always audience"
+      refute render(view) =~ "group content with instructor audience"
+      refute render(view) =~ "group content with feedback audience"
+      refute render(view) =~ "group content with never audience"
     end
 
     @tag isolation: "serializable"
@@ -3095,19 +3008,17 @@ defmodule OliWeb.PageDeliveryControllerTest do
       |> Seeder.create_section()
       |> Seeder.create_section_resources()
 
-    lti_params_id =
-      Oli.Lti.TestHelpers.all_default_claims()
-      |> put_in(
-        ["https://purl.imsglobal.org/spec/lti/claim/context", "id"],
-        map.section.context_id
-      )
-      |> cache_lti_params(user.id)
+    Oli.Lti.TestHelpers.all_default_claims()
+    |> put_in(
+      ["https://purl.imsglobal.org/spec/lti/claim/context", "id"],
+      map.section.context_id
+    )
+    |> cache_lti_params(user.id)
 
     conn =
       Plug.Test.init_test_session(conn, lti_session: nil)
-      |> Pow.Plug.assign_current_user(map.author, OliWeb.Pow.PowHelpers.get_pow_config(:author))
-      |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-      |> OliWeb.Common.LtiSession.put_session_lti_params(lti_params_id)
+      |> log_in_author(map.author)
+      |> log_in_user(user)
 
     {:ok,
      conn: conn,

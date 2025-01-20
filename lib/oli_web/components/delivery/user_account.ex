@@ -18,7 +18,7 @@ defmodule OliWeb.Components.Delivery.UserAccount do
   attr(:id, :string, required: true)
   attr(:ctx, SessionContext)
 
-  attr(:has_admin_role, :boolean,
+  attr(:is_admin, :boolean,
     required: true,
     doc:
       "if the user has an admin role (system, account, or content admin) the admin menu will be shown in the 3 workspaces (course author, instructor, and student)"
@@ -33,14 +33,14 @@ defmodule OliWeb.Components.Delivery.UserAccount do
     - author form ctx will be assigned to course author workspace menu.
     - user form ctx will be assigned to instructor or student workspace menu.
 
-    There is a special case; when the user has_admin_role, then the author form ctx will be assigned to the menu, regardless of the active workspace.
+    There is a special case; when the user is_admin, then the author form ctx will be assigned to the menu, regardless of the active workspace.
     """
   )
 
   attr(:class, :string, default: "")
   attr(:dropdown_class, :string, default: "")
 
-  def workspace_menu(%{has_admin_role: true} = assigns) do
+  def workspace_menu(%{is_admin: true} = assigns) do
     ~H"""
     <div class="relative">
       <button
@@ -56,7 +56,7 @@ defmodule OliWeb.Components.Delivery.UserAccount do
           ctx={@ctx}
           id={@id}
           target_signout_path={target_signout_path(@active_workspace)}
-          is_system_admin={true}
+          is_admin={true}
         />
       </.dropdown_menu>
     </div>
@@ -79,7 +79,7 @@ defmodule OliWeb.Components.Delivery.UserAccount do
           ctx={@ctx}
           id={@id}
           target_signout_path={target_signout_path(@active_workspace)}
-          is_system_admin={false}
+          is_admin={false}
         />
       </.dropdown_menu>
     </div>
@@ -130,7 +130,9 @@ defmodule OliWeb.Components.Delivery.UserAccount do
 
   attr(:id, :string, required: true)
   attr(:ctx, SessionContext)
-  attr(:is_system_admin, :boolean, required: true)
+  attr(:current_user, Accounts.User, default: nil)
+  attr(:current_author, Accounts.Author, default: nil)
+  attr(:is_admin, :boolean, required: true)
   attr(:class, :string, default: "")
   attr(:dropdown_class, :string, default: "")
 
@@ -139,24 +141,28 @@ defmodule OliWeb.Components.Delivery.UserAccount do
     <div class="relative">
       <button
         id={@id}
-        class={"flex flex-row items-center justify-center rounded-full outline outline-2 outline-neutral-300 dark:outline-neutral-700 hover:outline-4 hover:dark:outline-zinc-600 focus:outline-4 focus:outline-primary-300 dark:focus:outline-zinc-600 #{@class}"}
+        class={[
+          "flex flex-row items-center justify-center rounded-full",
+          @class,
+          "outline outline-2 outline-neutral-300 dark:outline-neutral-700 hover:outline-4 hover:dark:outline-zinc-600 focus:outline-4 focus:outline-primary-300 dark:focus:outline-zinc-600"
+        ]}
         phx-click={toggle_menu("##{@id}-dropdown")}
       >
         <.user_icon ctx={@ctx} />
       </button>
       <.dropdown_menu id={"#{@id}-dropdown"} class={@dropdown_class}>
-        <%= case assigns.ctx do %>
-          <% %SessionContext{author: %Author{}} -> %>
-            <.author_menu_items
-              id={"#{@id}-menu-items-admin"}
-              ctx={@ctx}
-              is_system_admin={@is_system_admin}
-            />
-          <% %SessionContext{user: %User{guest: true}} -> %>
-            <.guest_menu_items id={"#{@id}-menu-items-admin"} ctx={@ctx} />
-          <% %SessionContext{user: %User{}} -> %>
-            <.user_menu_items id={"#{@id}-menu-items-admin"} ctx={@ctx} />
-          <% _ -> %>
+        <%= if @is_admin do %>
+          <.author_menu_items id={"#{@id}-menu-items-admin"} ctx={@ctx} is_admin={@is_admin} />
+        <% else %>
+          <%= case assigns.ctx do %>
+            <% %SessionContext{user: %User{guest: true}} -> %>
+              <.guest_menu_items id={"#{@id}-menu-items-admin"} ctx={@ctx} />
+            <% %SessionContext{user: %User{}} -> %>
+              <.user_menu_items id={"#{@id}-menu-items-admin"} ctx={@ctx} />
+            <% %SessionContext{author: %Author{}} -> %>
+              <.author_menu_items id={"#{@id}-menu-items-admin"} ctx={@ctx} is_admin={@is_admin} />
+            <% _ -> %>
+          <% end %>
         <% end %>
       </.dropdown_menu>
     </div>
@@ -174,26 +180,18 @@ defmodule OliWeb.Components.Delivery.UserAccount do
 
   attr(:id, :string, required: true)
   attr(:ctx, SessionContext, required: true)
-  attr(:is_system_admin, :boolean, required: true)
+  attr(:is_admin, :boolean, required: true)
   attr(:target_signout_path, :string, default: "")
 
   def author_menu_items(assigns) do
     ~H"""
-    <.maybe_menu_item_open_admin_panel is_system_admin={@is_system_admin} />
-    <.menu_item_edit_author_account author={@ctx.author} />
+    <.menu_item_open_admin_panel :if={@is_admin} />
+    <.menu_item_edit_account href={~p"/authors/settings"} />
     <.menu_item_dark_mode_selector id={"#{@id}-dark-mode-selector"} ctx={@ctx} />
     <.menu_divider />
     <.menu_item_timezone_selector id={"#{@id}-tz-selector"} ctx={@ctx} />
     <.menu_divider />
-    <.menu_item_link
-      href={
-        Routes.authoring_session_path(OliWeb.Endpoint, :signout,
-          type: :author,
-          target: @target_signout_path
-        )
-      }
-      method={:delete}
-    >
+    <.menu_item_link href={~p"/authors/log_out"} method={:delete}>
       Sign out
     </.menu_item_link>
     """
@@ -205,23 +203,15 @@ defmodule OliWeb.Components.Delivery.UserAccount do
 
   def user_menu_items(assigns) do
     ~H"""
-    <.menu_item_maybe_linked_account user={@ctx.user} />
-    <.maybe_menu_item_edit_user_account user={@ctx.user} />
+    <.menu_item_edit_account :if={is_independent_learner?(@ctx.user)} href={~p"/users/settings"} />
     <.maybe_my_courses_menu_item_link user={@ctx.user} />
     <.menu_item_dark_mode_selector id={"#{@id}-dark-mode-selector"} ctx={@ctx} />
     <.menu_divider />
     <.menu_item_timezone_selector id={"#{@id}-tz-selector"} ctx={@ctx} />
     <.menu_divider />
     <.maybe_research_consent_link ctx={@ctx} />
-    <.menu_item_link
-      href={
-        Routes.session_path(OliWeb.Endpoint, :signout,
-          type: :user,
-          target: @target_signout_path
-        )
-      }
-      method={:delete}
-    >
+    <.menu_item_maybe_linked_account user={@ctx.user} />
+    <.menu_item_link href={~p"/users/log_out"} method={:delete}>
       Sign out
     </.menu_item_link>
     """
@@ -236,15 +226,13 @@ defmodule OliWeb.Components.Delivery.UserAccount do
     <.menu_divider />
     <.menu_item_timezone_selector id={"#{@id}-tz-selector"} ctx={@ctx} />
     <.menu_divider />
-    <.menu_item_link href={
-      Routes.delivery_path(OliWeb.Endpoint, :signin, section: maybe_section_slug(assigns))
-    }>
+    <.menu_item_link href={~p"/users/log_in?#{[section: maybe_section_slug(assigns)]}"}>
       Create account or sign in
     </.menu_item_link>
     <.menu_divider />
     <.maybe_research_consent_link ctx={@ctx} />
-    <.menu_item_link href={signout_path(@ctx)} method={:delete}>
-      <%= if @ctx.user.guest, do: "Leave course", else: "Sign out" %>
+    <.menu_item_link href={~p"/users/log_out"}>
+      Leave Guest account
     </.menu_item_link>
     """
   end
@@ -258,7 +246,7 @@ defmodule OliWeb.Components.Delivery.UserAccount do
     <div
       id={@id}
       phx-click-away={JS.hide()}
-      class={"hidden absolute top-[51px] -right-[9px] z-50 p-[10px] whitespace-nowrap bg-gray-100 border-gray-300 w-[220px] dark:bg-[#0F0D0F] rounded-xl border dark:border-zinc-800 #{@class}"}
+      class={"hidden absolute top-[55px] right-[0px] z-50 py-2 px-4 whitespace-nowrap bg-white w-[280px] dark:bg-[#0F0D0F] rounded-xl shadow-xl #{@class}"}
     >
       <ul>
         <%= render_slot(@inner_block) %>
@@ -271,7 +259,7 @@ defmodule OliWeb.Components.Delivery.UserAccount do
 
   def menu_item(assigns) do
     ~H"""
-    <li class="block p-1">
+    <li class="block p-1 whitespace-normal">
       <%= render_slot(@inner_block) %>
     </li>
     """
@@ -279,8 +267,8 @@ defmodule OliWeb.Components.Delivery.UserAccount do
 
   def menu_divider(assigns) do
     ~H"""
-    <li class="py-[4px]">
-      <div class="h-0 border border-t border-gray-200 dark:border-zinc-800"></div>
+    <li class="py-2">
+      <div class="h-0 border-t border-gray-200 dark:border-zinc-800"></div>
     </li>
     """
   end
@@ -294,14 +282,14 @@ defmodule OliWeb.Components.Delivery.UserAccount do
     case assigns[:method] do
       nil ->
         ~H"""
-        <%= link to: @href, class: "w-full text-gray-800 hover:text-gray-800 dark:text-white hover:text-white text-sm font-normal font-['Roboto'] h-[26px] p-[5px] rounded-md justify-start items-center inline-flex block hover:no-underline dark:hover:bg-white/5 hover:bg-gray-200 cursor-pointer", target: @target do %>
+        <%= link to: @href, class: "w-full text-gray-800 hover:text-gray-800 dark:text-white hover:text-white text-sm font-normal font-['Roboto'] h-[26px] p-[5px] rounded-md justify-start items-center inline-flex block hover:no-underline dark:hover:bg-white/5 hover:bg-gray-100 cursor-pointer", target: @target do %>
           <%= render_slot(@inner_block) %>
         <% end %>
         """
 
       _method ->
         ~H"""
-        <%= link to: @href, method: @method, class: "w-[190px] text-gray-800 hover:text-white dark:text-white text-sm font-normal font-['Roboto'] h-8 px-1.5 py-2 mt-[10px] m-[5px] rounded-md border border-rose-400 justify-center items-center gap-2.5 inline-flex cursor-pointer hover:no-underline hover:bg-red-300 hover:border-red-500 dark:hover:bg-[#33181A]", target: @target do %>
+        <%= link to: @href, method: @method, class: "w-full text-gray-800 hover:text-white dark:text-white text-sm font-normal font-['Roboto'] h-8 px-1.5 py-2 mt-[10px] m-[5px] rounded-md border border-rose-400 justify-center items-center gap-2.5 inline-flex cursor-pointer hover:no-underline hover:bg-red-300 hover:border-red-500 dark:hover:bg-[#33181A]", target: @target do %>
           <%= render_slot(@inner_block) %>
         <% end %>
         """
@@ -312,47 +300,43 @@ defmodule OliWeb.Components.Delivery.UserAccount do
 
   def menu_item_maybe_linked_account(assigns) do
     ~H"""
-    <%= case linked_author_account(@user) do %>
-      <% nil -> %>
-        <%= if Sections.is_independent_instructor?(@user) do %>
+    <%= if can_manage_linked_account?(@user) do %>
+      <%= case linked_author_account(@user) do %>
+        <% nil -> %>
           <.menu_item_link href={Routes.delivery_path(OliWeb.Endpoint, :link_account)}>
             Link authoring account
           </.menu_item_link>
+        <% linked_author_account_email -> %>
+          <.menu_item>
+            <.menu_item_label>Linked Authoring Account</.menu_item_label>
+          </.menu_item>
 
-          <.menu_divider />
-        <% end %>
-      <% linked_author_account_email -> %>
-        <.menu_item>
-          <div class="text-xs font-semibold mb-1">Linked Authoring Account:</div>
-          <a href={Routes.live_path(OliWeb.Endpoint, OliWeb.Projects.ProjectsLive)} target="_blank">
-            <div class="flex flex-row justify-between items-center">
-              <div role="linked authoring account email"><%= linked_author_account_email %></div>
-              <div><i class="fas fa-external-link-alt ml-2"></i></div>
+          <.menu_item_link href={Routes.delivery_path(OliWeb.Endpoint, :link_account)}>
+            <div class="overflow-hidden text-ellipsis" role="linked authoring account email">
+              <%= linked_author_account_email %>
             </div>
-          </a>
-        </.menu_item>
+          </.menu_item_link>
+      <% end %>
 
-        <.menu_item_link href={Routes.delivery_path(OliWeb.Endpoint, :link_account)}>
-          Link a different account
-        </.menu_item_link>
-
-        <.menu_divider />
+      <.menu_divider />
     <% end %>
     """
   end
 
-  attr(:user, User, required: true)
+  defp can_manage_linked_account?(user) do
+    Sections.is_independent_instructor?(user) || Sections.is_institution_instructor?(user) ||
+      Sections.is_institution_admin?(user)
+  end
 
-  def maybe_menu_item_edit_user_account(assigns) do
+  attr(:href, :string, required: true)
+
+  def menu_item_edit_account(assigns) do
     ~H"""
-    <.menu_item_link
-      :if={is_independent_learner?(@user)}
-      href={Routes.pow_registration_path(OliWeb.Endpoint, :edit)}
-    >
+    <.menu_item_link href={@href}>
       Edit Account
     </.menu_item_link>
 
-    <.menu_divider :if={is_independent_learner?(@user)} />
+    <.menu_divider />
     """
   end
 
@@ -370,25 +354,13 @@ defmodule OliWeb.Components.Delivery.UserAccount do
     """
   end
 
-  attr(:author, Author, required: true)
-
-  def menu_item_edit_author_account(assigns) do
-    ~H"""
-    <.menu_item_link href={Routes.live_path(OliWeb.Endpoint, OliWeb.Workspace.AccountDetailsLive)}>
-      Edit Account
-    </.menu_item_link>
-
-    <.menu_divider />
-    """
-  end
-
   attr(:id, :string, required: true)
   attr(:ctx, SessionContext, required: true)
 
   def menu_item_dark_mode_selector(assigns) do
     ~H"""
     <.menu_item>
-      <div class="dark:text-gray-400 text-xs font-medium font-['Roboto'] mb-[10px]">THEME</div>
+      <.menu_item_label>Theme</.menu_item_label>
       <div>
         <%= React.component(
           @ctx,
@@ -409,25 +381,32 @@ defmodule OliWeb.Components.Delivery.UserAccount do
   def menu_item_timezone_selector(assigns) do
     ~H"""
     <.menu_item>
-      <div class="dark:text-gray-400 text-xs font-medium font-['Roboto'] mb-[10px]">TIMEZONE</div>
-      <div class="w-[190px]">
+      <.menu_item_label>Timezone</.menu_item_label>
+      <div class="w-full">
         <Timezone.select id={@id} ctx={@ctx} />
       </div>
     </.menu_item>
     """
   end
 
-  attr(:is_system_admin, :boolean, required: true)
+  slot :inner_block, required: true
 
-  @spec maybe_menu_item_open_admin_panel(map()) :: Phoenix.LiveView.Rendered.t()
-  def maybe_menu_item_open_admin_panel(assigns) do
+  defp menu_item_label(assigns) do
     ~H"""
-    <%= if @is_system_admin do %>
-      <.menu_item_link href={~p"/admin"}>
-        <.icon name="fa-solid fa-wrench" class="mr-2" /> Admin Panel
-      </.menu_item_link>
-      <.menu_divider />
-    <% end %>
+    <div class="text-gray-500 dark:text-gray-400 text-xs font-medium font-['Roboto'] mb-[10px] uppercase">
+      <%= render_slot(@inner_block) %>
+    </div>
+    """
+  end
+
+  @spec menu_item_open_admin_panel(map()) :: Phoenix.LiveView.Rendered.t()
+  def menu_item_open_admin_panel(assigns) do
+    ~H"""
+    <.menu_item_link href={~p"/admin"}>
+      <.icon name="fa-solid fa-wrench" class="mr-2" /> Admin Panel
+    </.menu_item_link>
+
+    <.menu_divider />
     """
   end
 
@@ -486,6 +465,8 @@ defmodule OliWeb.Components.Delivery.UserAccount do
     """
   end
 
+  attr(:ctx, SessionContext, required: true)
+
   def preview_user_menu(assigns) do
     ~H"""
     <div class="flex">
@@ -533,18 +514,6 @@ defmodule OliWeb.Components.Delivery.UserAccount do
 
   def linked_author_account(%User{author: %Author{email: email}}), do: email
   def linked_author_account(_), do: nil
-
-  defp signout_path(%SessionContext{user: user, author: author}) do
-    is_admin? = Oli.Accounts.has_admin_role?(author)
-
-    case {user, is_admin?} do
-      {_, true} ->
-        Routes.authoring_session_path(OliWeb.Endpoint, :signout, type: :author)
-
-      {_user, _} ->
-        Routes.session_path(OliWeb.Endpoint, :signout, type: :user)
-    end
-  end
 
   defp to_initials(%{name: nil}), do: "G"
 

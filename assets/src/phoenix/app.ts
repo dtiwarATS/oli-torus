@@ -198,6 +198,7 @@ declare global {
       finalize: typeof finalize;
       CreateAccountPopup: (node: any, props: any) => void;
     };
-    keepAlive: () => void;
   }
 }
+
+export { liveSocket };

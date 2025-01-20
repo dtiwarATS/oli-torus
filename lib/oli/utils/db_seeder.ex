@@ -17,7 +17,6 @@ defmodule Oli.Seeder do
   alias Oli.Delivery.Sections.Section
   alias Oli.Delivery.Sections.SectionsProjectsPublications
   alias Oli.Delivery.Sections.SectionResource
-  alias Oli.Delivery.Snapshots.Snapshot
   alias Oli.Inventories
   alias Oli.Qa.Reviews
   alias Oli.Activities
@@ -26,6 +25,7 @@ defmodule Oli.Seeder do
   alias Oli.Delivery.Attempts.PageLifecycle.FinalizationSummary
   alias Oli.Utils.Seeder.StudentAttemptSeed
   alias Oli.Delivery.Attempts.ActivityLifecycle.Evaluate
+  alias Oli.Utils.Seeder.AccountsFixtures
 
   def base_project_with_resource(author) do
     {:ok, family} =
@@ -394,25 +394,23 @@ defmodule Oli.Seeder do
       })
       |> Repo.insert()
 
-    {:ok, author} =
-      Author.noauth_changeset(%Author{}, %{
+    author =
+      AccountsFixtures.author_fixture(%{
         email: "test#{System.unique_integer([:positive])}@test.com",
         given_name: "First",
         family_name: "Last",
         provider: "foo",
         system_role_id: SystemRole.role_id().author
       })
-      |> Repo.insert()
 
-    {:ok, author2} =
-      Author.noauth_changeset(%Author{}, %{
+    author2 =
+      AccountsFixtures.author_fixture(%{
         email: "test#{System.unique_integer([:positive])}@test.com",
         given_name: "First",
         family_name: "Last",
         provider: "foo",
         system_role_id: SystemRole.role_id().author
       })
-      |> Repo.insert()
 
     {:ok, _} =
       AuthorProject.changeset(%AuthorProject{}, %{
@@ -1835,11 +1833,6 @@ defmodule Oli.Seeder do
       |> Repo.insert()
 
     Map.put(map, atom, author)
-  end
-
-  def add_activity_snapshot(map, attrs, tag) do
-    {:ok, snapshot} = Snapshot.changeset(%Snapshot{}, attrs) |> Repo.insert()
-    Map.put(map, tag, snapshot)
   end
 
   def add_review(map, type, tag) do

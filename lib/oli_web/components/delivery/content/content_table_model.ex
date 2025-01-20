@@ -1,6 +1,10 @@
 defmodule OliWeb.Components.Delivery.ContentTableModel do
   use Phoenix.Component
-  alias OliWeb.Common.Table.{ColumnSpec, SortableTableModel}
+
+  alias OliWeb.Common.Table.ColumnSpec
+  alias OliWeb.Common.Table.SortableTableModel
+  alias OliWeb.Delivery.InstructorDashboard.HTMLComponents
+
   alias OliWeb.Router.Helpers, as: Routes
 
   def new(containers, container_column_name, section_slug, view, patch_url_type, navigation_data) do
@@ -18,9 +22,8 @@ defmodule OliWeb.Components.Delivery.ContentTableModel do
       },
       %ColumnSpec{
         name: :student_completion,
-        label: "STUDENT PROGRESS",
-        tooltip:
-          "Progress is percent attempted of activities present on the page from the most recent page attempt. If there are no activities within the page, and if the student has visited that page, we count that as an attempt.",
+        th_class: "flex items-center gap-1 border-b-0",
+        label: HTMLComponents.student_progress_label(%{title: "STUDENT PROGRESS"}),
         render_fn: &__MODULE__.render_student_completion/3
       },
       %ColumnSpec{

@@ -1,25 +1,32 @@
 defmodule OliWeb.Delivery.NewCourse do
   use OliWeb, :live_view
 
-  on_mount(OliWeb.LiveSessionPlugs.SetSection)
-  on_mount(OliWeb.LiveSessionPlugs.SetBrand)
-  on_mount(OliWeb.LiveSessionPlugs.SetPreviewMode)
+  on_mount {OliWeb.UserAuth, :ensure_authenticated}
+  on_mount OliWeb.LiveSessionPlugs.SetCtx
+  on_mount OliWeb.LiveSessionPlugs.SetSection
+  on_mount OliWeb.LiveSessionPlugs.SetBrand
+  on_mount OliWeb.LiveSessionPlugs.SetPreviewMode
 
   alias Oli.Accounts
   alias Oli.Delivery
-  alias Oli.Lti.LtiParams
+  alias Oli.Delivery.DistributedDepotCoordinator
+  alias Oli.Delivery.Sections
   alias Oli.Delivery.Sections.PostProcessing
   alias Oli.Delivery.Sections.Section
-  alias Oli.Delivery.Sections
+  alias Oli.Delivery.Sections.SectionResourceDepot
   alias Oli.Repo
-  alias OliWeb.Common.{Breadcrumb, Stepper}
+  alias OliWeb.Common.{Breadcrumb, Stepper, FormatDateTime}
   alias OliWeb.Common.Stepper.Step
+  alias OliWeb.Components.Common
   alias OliWeb.Delivery.NewCourse.{CourseDetails, NameCourse, SelectSource}
   alias Lti_1p3.Tool.ContextRoles
 
   alias Phoenix.LiveView.JS
 
   import OliWeb.Components.Delivery.Layouts
+
+  on_mount {OliWeb.UserAuth, :ensure_authenticated}
+  on_mount OliWeb.LiveSessionPlugs.SetCtx
 
   @form_id "open_and_free_form"
   def mount(_params, session, socket) do
@@ -54,26 +61,24 @@ defmodule OliWeb.Delivery.NewCourse do
       }
     ]
 
-    lti_params =
-      case session["lti_params_id"] do
+    {current_user, lti_params} =
+      case socket.assigns.current_user do
         nil ->
-          nil
+          {nil, nil}
 
-        lti_params_id ->
-          %{params: lti_params} = LtiParams.get_lti_params(lti_params_id)
-          lti_params
-      end
+        current_user ->
+          current_user =
+            Accounts.load_lti_params(current_user)
+            |> Repo.preload([:author])
 
-    current_user =
-      case session["current_user_id"] do
-        nil ->
-          nil
+          lti_params =
+            if current_user.lti_params do
+              current_user.lti_params.params
+            else
+              nil
+            end
 
-        current_user_id ->
-          case session["is_system_admin"] do
-            true -> nil
-            _ -> Accounts.get_user!(current_user_id, preload: [:author])
-          end
+          {current_user, lti_params}
       end
 
     changeset =
@@ -97,18 +102,14 @@ defmodule OliWeb.Delivery.NewCourse do
   end
 
   attr(:breadcrumbs, :any, default: [Breadcrumb.new(%{full_title: "Course Creation"})])
+  attr(:is_admin, :boolean, required: true)
 
   def render(assigns) do
     ~H"""
     <%= case @live_action do %>
       <% :admin -> %>
       <% _ -> %>
-        <.header
-          ctx={@ctx}
-          section={@section}
-          preview_mode={@preview_mode}
-          is_system_admin={@is_system_admin}
-        />
+        <.header ctx={@ctx} section={@section} preview_mode={@preview_mode} is_admin={@is_admin} />
     <% end %>
     <div id={@form_id} phx-hook="SubmitForm" class="mt-14 h-[calc(100vh-56px)]">
       <.live_component
@@ -274,7 +275,7 @@ defmodule OliWeb.Delivery.NewCourse do
              }
            ) do
         {:ok, section} ->
-          send(liveview_pid, {:section_created, section.slug})
+          send(liveview_pid, {:section_created, section.id, section.slug})
 
         {:error, error} ->
           {_error_id, error_msg} = log_error("Failed to create new section", error)
@@ -320,12 +321,13 @@ defmodule OliWeb.Delivery.NewCourse do
               has_experiments: has_experiments,
               analytics_version: :v2,
               welcome_title: project.welcome_title,
-              encouraging_subtitle: project.encouraging_subtitle
+              encouraging_subtitle: project.encouraging_subtitle,
+              certificate: nil
             })
 
           case create_from_publication(socket, publication, section_params) do
             {:ok, section} ->
-              send(liveview_pid, {:section_created, section.slug})
+              send(liveview_pid, {:section_created, section.id, section.slug})
 
             {:error, error} ->
               {_error_id, error_msg} = log_error("Failed to create new section", error)
@@ -362,7 +364,7 @@ defmodule OliWeb.Delivery.NewCourse do
 
           case create_from_product(socket, blueprint, section_params) do
             {:ok, section} ->
-              send(liveview_pid, {:section_created, section.slug})
+              send(liveview_pid, {:section_created, section.id, section.slug})
 
             {:error, error} ->
               {_error_id, error_msg} = log_error("Failed to create new section", error)
@@ -431,13 +433,16 @@ defmodule OliWeb.Delivery.NewCourse do
     end
   end
 
-  def handle_info({:section_created, section_slug}, socket) do
-    socket = put_flash(socket, :info, "Section successfully created.")
+  def handle_info({:section_created, section_id, section_slug}, socket) do
+    Task.Supervisor.start_child(Oli.TaskSupervisor, fn ->
+      depot_desc = SectionResourceDepot.depot_desc()
+      DistributedDepotCoordinator.init_if_necessary(depot_desc, section_id, SectionResourceDepot)
+    end)
 
-    {:noreply,
-     redirect(socket,
-       to: Routes.live_path(OliWeb.Endpoint, OliWeb.Sections.OverviewView, section_slug)
-     )}
+    socket
+    |> put_flash(:info, "Section successfully created.")
+    |> redirect(to: ~p"/sections/#{section_slug}/manage")
+    |> noreply()
   end
 
   def handle_info({:section_created_error, error_msg}, socket) do
@@ -490,6 +495,7 @@ defmodule OliWeb.Delivery.NewCourse do
         _ ->
           section
       end
+      |> convert_dates(socket.assigns.ctx)
 
     changeset =
       socket.assigns.changeset
@@ -525,7 +531,7 @@ defmodule OliWeb.Delivery.NewCourse do
             create_section(socket.assigns.live_action, assign(socket, changeset: changeset))
           else
             {:noreply,
-             assign(socket, changeset: changeset)
+             assign(socket, changeset: localize_dates(changeset, socket.assigns.ctx))
              |> put_flash(
                :form_error,
                "The course's start date must be earlier than its end date"
@@ -533,7 +539,7 @@ defmodule OliWeb.Delivery.NewCourse do
           end
         else
           {:noreply,
-           assign(socket, changeset: changeset)
+           assign(socket, changeset: localize_dates(changeset, socket.assigns.ctx))
            |> put_flash(:form_error, "Some fields require your attention")}
         end
     end
@@ -560,9 +566,32 @@ defmodule OliWeb.Delivery.NewCourse do
     end)
   end
 
+  defp convert_dates(%{"start_date" => start_date, "end_date" => end_date} = params, ctx) do
+    utc_start_date = FormatDateTime.datestring_to_utc_datetime(start_date, ctx)
+    utc_end_date = FormatDateTime.datestring_to_utc_datetime(end_date, ctx)
+
+    params
+    |> Map.put("start_date", utc_start_date)
+    |> Map.put("end_date", utc_end_date)
+  end
+
+  defp convert_dates(params, _ctx), do: params
+
+  defp localize_dates(changeset, ctx) do
+    utc_start_date = Common.fetch_field(changeset, :start_date)
+    utc_end_date = Common.fetch_field(changeset, :end_date)
+
+    local_start_date = FormatDateTime.convert_datetime(utc_start_date, ctx)
+    local_end_date = FormatDateTime.convert_datetime(utc_end_date, ctx)
+
+    changeset
+    |> Ecto.Changeset.put_change(:start_date, local_start_date)
+    |> Ecto.Changeset.put_change(:end_date, local_end_date)
+  end
+
   defp validate_course_dates(changeset) do
     {_, start_date} = Ecto.Changeset.fetch_field(changeset, :start_date)
     {_, end_date} = Ecto.Changeset.fetch_field(changeset, :end_date)
-    Date.diff(start_date, end_date) < 0
+    DateTime.compare(start_date, end_date) == :lt
   end
 end

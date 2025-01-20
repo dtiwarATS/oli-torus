@@ -169,12 +169,15 @@ defmodule OliWeb.Api.ActivityController do
   end
 
   @doc false
-  def create(conn, %{
-        "project" => project_slug,
-        "activity_type" => activity_type_slug,
-        "model" => model,
-        "objectives" => objectives
-      }) do
+  def create(
+        conn,
+        %{
+          "project" => project_slug,
+          "activity_type" => activity_type_slug,
+          "model" => model,
+          "objectives" => objectives
+        }
+      ) do
     author = conn.assigns[:current_author]
 
     scope = Map.get(conn.body_params, "scope", "embedded")
@@ -185,13 +188,65 @@ defmodule OliWeb.Api.ActivityController do
            author,
            model,
            objectives,
-           scope
+           scope,
+           # optional:
+           Map.get(conn.body_params, "title", nil),
+           Map.get(conn.body_params, "objective_map", %{}),
+           Map.get(conn, "tags", [])
          ) do
       {:ok, {%{slug: slug, resource_id: resource_id}, _}} ->
         json(conn, %{
           "type" => "success",
           "revisionSlug" => slug,
           "resourceId" => resource_id
+        })
+
+      {:error, {:not_found}} ->
+        error(conn, 404, "not found")
+
+      {:error, {:not_authorized}} ->
+        error(conn, 403, "unauthorized")
+
+      e ->
+        {_, msg} = Oli.Utils.log_error("Could not create activity", e)
+        error(conn, 500, msg)
+    end
+  end
+
+  @doc false
+  def create_bulk(conn, %{
+        "project" => project_slug,
+        "bulkData" => bulk_data
+      }) do
+    author = conn.assigns[:current_author]
+
+    scope = Map.get(conn.body_params, "scope", "embedded")
+
+    case ActivityEditor.create_bulk(
+           project_slug,
+           author,
+           bulk_data,
+           scope
+         ) do
+      {:ok, activities} ->
+        revisions =
+          Enum.map(activities, fn a ->
+            activity = a.activity
+
+            %{
+              "revisionSlug" => activity.slug,
+              "resourceId" => activity.resource_id,
+              "activityTypeSlug" => a.activity_type_slug,
+              "title" => activity.title,
+              "objectives" => activity.objectives,
+              "tags" => activity.tags,
+              "content" => activity.content
+            }
+          end)
+
+        json(conn, %{
+          "type" => "success",
+          "revisions" => revisions
         })
 
       {:error, {:not_found}} ->

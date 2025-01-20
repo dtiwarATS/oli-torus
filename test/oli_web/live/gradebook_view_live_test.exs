@@ -16,11 +16,11 @@ defmodule OliWeb.GradebookViewLiveTest do
   describe "user cannot access when is not logged in" do
     setup [:section_with_assessment]
 
-    test "redirects to enroll page when accessing the gradebook view", %{
+    test "redirects to login page when accessing the gradebook view", %{
       conn: conn,
       section: section
     } do
-      redirect_path = "/sections/#{section.slug}/enroll"
+      redirect_path = "/users/log_in"
 
       {:error, {:redirect, %{to: ^redirect_path}}} =
         live(conn, live_view_gradebook_view_route(section.slug))
@@ -30,13 +30,13 @@ defmodule OliWeb.GradebookViewLiveTest do
   describe "user cannot access when is logged in as an author but is not a system admin" do
     setup [:author_conn, :section_with_assessment]
 
-    test "redirects to section enroll page when accessing the student view", %{
+    test "redirects to login page when accessing the student view", %{
       conn: conn,
       section: section
     } do
       conn = get(conn, live_view_gradebook_view_route(section.slug))
 
-      redirect_path = "/sections/#{section.slug}/enroll"
+      redirect_path = "/users/log_in"
 
       assert conn
              |> get(live_view_gradebook_view_route(section.slug))
@@ -91,6 +91,19 @@ defmodule OliWeb.GradebookViewLiveTest do
                )
                |> render =~ "#{@expected_score}/#{@out_of}"
       end
+    end
+
+    test "table has classes to ensure overflow", %{conn: conn} do
+      %{section: section} = create_project_with_n_scored_pages(conn, 30)
+
+      user = insert(:user, %{family_name: "James", given_name: "LeBron"})
+      enroll_user_to_section(user, section, :context_learner)
+
+      {:ok, view, _html} = live(conn, live_view_gradebook_view_route(section.slug))
+
+      # Check that the table is rendered with a horizontal scroll bar
+      assert view
+             |> element(~s(table[class="overflow-x-scroll block scrollbar"]))
     end
   end
 end

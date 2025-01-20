@@ -177,7 +177,7 @@ defmodule OliWeb.AllPagesLiveTest do
       project = insert(:project)
 
       redirect_path =
-        "/authoring/session/new?request_path=%2Fauthoring%2Fproject%2F#{project.slug}%2Fpages"
+        "/authors/log_in"
 
       {:error,
        {:redirect,
@@ -199,7 +199,7 @@ defmodule OliWeb.AllPagesLiveTest do
       {:ok, view, _html} = live(conn, live_view_all_pages_route(project.slug))
 
       assert view
-             |> element("h3")
+             |> element("#header_id")
              |> render() =~
                "Browse All Pages"
 

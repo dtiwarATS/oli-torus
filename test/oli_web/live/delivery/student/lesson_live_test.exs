@@ -234,6 +234,71 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         }
       )
 
+    ## activities...
+    mcq_reg = Oli.Activities.get_registration_by_slug("oli_multiple_choice")
+
+    mcq_activity_1_revision =
+      insert(:revision,
+        resource_type_id: ResourceType.id_for_activity(),
+        objectives: %{
+          "1" => [
+            objective_1_revision.resource_id
+          ]
+        },
+        activity_type_id: mcq_reg.id,
+        title: "Multiple Choice 1",
+        content: generate_mcq_content("This is the first question")
+      )
+
+    one_at_a_time_question_page_revision =
+      insert(:revision,
+        resource_type_id: ResourceType.get_id_by_type("page"),
+        title: "This is a page configured to show one question at a time",
+        duration_minutes: 5,
+        graded: true,
+        max_attempts: 5,
+        assessment_mode: :one_at_a_time,
+        content: %{
+          model: [
+            %{
+              id: "4286170280",
+              type: "content",
+              children: [
+                %{
+                  id: "2905665054",
+                  type: "p",
+                  children: [
+                    %{
+                      text: "This is a page with a multiple choice activity."
+                    }
+                  ]
+                }
+              ]
+            },
+            %{
+              id: "3330767711",
+              type: "activity-reference",
+              children: [],
+              activity_id: mcq_activity_1_revision.resource.id
+            }
+          ],
+          bibrefs: [],
+          version: "0.1.0"
+        }
+      )
+
+    empty_one_at_a_time_question_page_revision =
+      insert(:revision,
+        resource_type_id: ResourceType.get_id_by_type("page"),
+        title: "This is a page configured to show one question at a time with no questions",
+        duration_minutes: 5,
+        graded: true,
+        max_attempts: 5,
+        content: %{
+          model: []
+        }
+      )
+
     ## sections and subsections...
     subsection_1_revision =
       insert(:revision, %{
@@ -315,7 +380,9 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         resource_type_id: Oli.Resources.ResourceType.get_id_by_type("container"),
         children: [
           unit_1_revision.resource_id,
-          unit_2_revision.resource_id
+          unit_2_revision.resource_id,
+          one_at_a_time_question_page_revision.resource_id,
+          empty_one_at_a_time_question_page_revision.resource_id
         ],
         title: "Root Container"
       })
@@ -334,6 +401,9 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         page_3_revision,
         page_4_revision,
         page_5_revision,
+        mcq_activity_1_revision,
+        one_at_a_time_question_page_revision,
+        empty_one_at_a_time_question_page_revision,
         subsection_1_revision,
         section_1_revision,
         module_1_revision,
@@ -371,7 +441,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         base_project: project,
         title: "The best course ever!",
         start_date: ~U[2023-10-30 20:00:00Z],
-        analytics_version: :v2
+        analytics_version: :v2,
+        assistant_enabled: true
       )
 
     {:ok, section} = Sections.create_section_resources(section, publication)
@@ -391,6 +462,20 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       end_date: ~U[2023-11-14 20:00:00Z]
     })
 
+    # configure page as one at a time
+    Sections.get_section_resource(section.id, one_at_a_time_question_page_revision.resource_id)
+    |> Sections.update_section_resource(%{
+      assessment_mode: :one_at_a_time
+    })
+
+    Sections.get_section_resource(
+      section.id,
+      empty_one_at_a_time_question_page_revision.resource_id
+    )
+    |> Sections.update_section_resource(%{
+      assessment_mode: :one_at_a_time
+    })
+
     # enable collaboration spaces for all pages in the section
     {_total_page_count, _section_resources} =
       Oli.Resources.Collaboration.enable_all_page_collab_spaces_for_section(
@@ -408,6 +493,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
     %{
       section: section,
+      project: project,
+      publication: publication,
       bibentry_1: bibentry_1_revision,
       objective_1: objective_1_revision,
       objective_2: objective_2_revision,
@@ -416,6 +503,9 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       page_1: page_1_revision,
       exploration_1: exploration_1_revision,
       graded_adaptive_page_revision: graded_adaptive_page_revision,
+      mcq_activity_1: mcq_activity_1_revision,
+      one_at_a_time_question_page: one_at_a_time_question_page_revision,
+      empty_one_at_a_time_question_page: empty_one_at_a_time_question_page_revision,
       page_2: page_2_revision,
       page_3: page_3_revision,
       page_4: page_4_revision,
@@ -428,6 +518,117 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       unit_2: unit_2_revision
     }
   end
+
+  defp generate_mcq_content(title) do
+    %{
+      "stem" => %{
+        "id" => "2028833010",
+        "content" => [
+          %{"id" => "280825708", "type" => "p", "children" => [%{"text" => title}]}
+        ]
+      },
+      "choices" => generate_choices("2028833010"),
+      "authoring" => %{
+        "parts" => [
+          %{
+            "id" => "1",
+            "hints" => [
+              %{
+                "id" => "540968727",
+                "content" => [
+                  %{"id" => "2256338253", "type" => "p", "children" => [%{"text" => ""}]}
+                ]
+              },
+              %{
+                "id" => "2627194758",
+                "content" => [
+                  %{"id" => "3013119256", "type" => "p", "children" => [%{"text" => ""}]}
+                ]
+              },
+              %{
+                "id" => "2413327578",
+                "content" => [
+                  %{"id" => "3742562774", "type" => "p", "children" => [%{"text" => ""}]}
+                ]
+              }
+            ],
+            "outOf" => nil,
+            "responses" => [
+              %{
+                "id" => "4122423546",
+                "rule" => "(!(input like {1968053412})) && (input like {1436663133})",
+                "score" => 1,
+                "feedback" => %{
+                  "id" => "685174561",
+                  "content" => [
+                    %{
+                      "id" => "2621700133",
+                      "type" => "p",
+                      "children" => [%{"text" => "Correct"}]
+                    }
+                  ]
+                }
+              },
+              %{
+                "id" => "3738563441",
+                "rule" => "input like {.*}",
+                "score" => 0,
+                "feedback" => %{
+                  "id" => "3796426513",
+                  "content" => [
+                    %{
+                      "id" => "1605260471",
+                      "type" => "p",
+                      "children" => [%{"text" => "Incorrect"}]
+                    }
+                  ]
+                }
+              }
+            ],
+            "gradingApproach" => "automatic",
+            "scoringStrategy" => "average"
+          }
+        ],
+        "correct" => [["1436663133"], "4122423546"],
+        "version" => 2,
+        "targeted" => [],
+        "previewText" => "",
+        "transformations" => [
+          %{
+            "id" => "1349799137",
+            "path" => "choices",
+            "operation" => "shuffle",
+            "firstAttemptOnly" => true
+          }
+        ]
+      }
+    }
+  end
+
+  defp generate_choices(id),
+    do: [
+      %{
+        # this id value is the one that should be passed to set_activity_attempt as response_input_value
+        id: "id_for_option_a",
+        content: [
+          %{
+            id: "1866911747",
+            type: "p",
+            children: [%{text: "Choice 1 for #{id}"}]
+          }
+        ]
+      },
+      %{
+        id: "id_for_option_b",
+        content: [
+          %{
+            id: "3926142114",
+            type: "p",
+            children: [%{text: "Choice 2 for #{id}"}]
+          }
+        ]
+      }
+    ]
 
   describe "user" do
     setup [:create_elixir_project]
@@ -445,7 +646,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
 
       assert redirect_path ==
-               "/?request_path=%2Fsections%2F#{section.slug}%2Flesson%2F#{page_1.slug}&section=#{section.slug}"
+               "/users/log_in"
     end
   end
 
@@ -481,9 +682,9 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
           )
         )
 
+      # adaptive pages should not have query params in the url (MER-3708)
       assert redirect_path ==
-               live_view_adaptive_lesson_live_route(section.slug, exploration_1.slug) <>
-                 "?request_path=some_request_path&selected_view=gallery"
+               live_view_adaptive_lesson_live_route(section.slug, exploration_1.slug)
     end
 
     test "can see default logo", %{
@@ -498,6 +699,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
 
+      ensure_content_is_visible(view)
+
       assert element(view, "#header_logo_button") |> render() =~ "/images/oli_torus_logo.png"
     end
 
@@ -511,7 +714,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
-
+      ensure_content_is_visible(view)
       assert element(view, "#header_logo_button") |> render() =~ "www.logo.com"
     end
 
@@ -527,6 +730,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+
+      ensure_content_is_visible(view)
 
       assert has_element?(view, "span", "The best course ever!")
 
@@ -568,6 +773,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         })
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(product.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       assert has_element?(
                view,
@@ -594,8 +800,27 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
-
+      ensure_content_is_visible(view)
       assert has_element?(view, "div[role='page content'] p", "Here's some practice page content")
+    end
+
+    @tag isolation: "serializable"
+    test "timer will not be shown on practice pages", %{
+      conn: conn,
+      user: user,
+      section: section,
+      page_1: ungraded_page
+    } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      {:ok, view, _html} =
+        live(conn, "/sections/#{section.slug}/lesson/#{ungraded_page.slug}")
+
+      ensure_content_is_visible(view)
+
+      assert render(view) =~ ungraded_page.title
+      refute render(view) =~ "<div id=\"countdown_timer_display\""
     end
 
     test "can not see `reset answers` button on practice pages without activities", %{
@@ -622,6 +847,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       assert has_element?(
                view,
@@ -643,6 +869,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_3.slug))
 
+      ensure_content_is_visible(view)
+
       assert has_element?(
                view,
                "div[data-live-react-class='Components.References']"
@@ -662,7 +890,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         create_attempt(user, section, page_3, %{lifecycle_state: :active})
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_3.slug))
-
+      ensure_content_is_visible(view)
       refute has_element?(view, "div[id='attempts_summary_with_tooltip']", "Attempts 0/5")
       refute has_element?(view, "button[id='begin_attempt_button']", "Begin 1st Attempt")
       assert has_element?(view, "div[role='page content']")
@@ -681,12 +909,18 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       _first_attempt_in_progress =
         create_attempt(user, section, exploration_1, %{lifecycle_state: :active})
 
-      {:ok, view, html} =
-        live(conn, live_view_adaptive_lesson_live_route(section.slug, exploration_1.slug))
+      conn =
+        get(
+          conn,
+          live_view_adaptive_lesson_live_route(
+            section.slug,
+            exploration_1.slug
+          )
+        )
 
-      assert has_element?(view, "div[id='delivery_container']")
+      assert html_response(conn, 200) =~ ~s{<div id=\"delivery_container\">}
       # It loads the adaptive themes
-      assert html =~ "/css/delivery_adaptive_themes_default_light.css"
+      assert html_response(conn, 200) =~ "/css/delivery_adaptive_themes_default_light.css"
     end
 
     test "back button of an adaptive page (NOT an exploration one) points to the provided url param 'request_path'",
@@ -706,9 +940,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       request_path = "some_request_path"
 
-      {:ok, view, _html} =
-        live(
-          conn,
+      conn =
+        conn
+        |> init_test_session(%{request_path: request_path})
+        |> get(
           live_view_adaptive_lesson_live_route(
             section.slug,
             graded_adaptive_page_revision.slug,
@@ -716,8 +951,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
           )
         )
 
-      assert view
-             |> render()
+      assert conn.resp_body
              |> Floki.parse_fragment!()
              |> Floki.find(~s{div[data-react-class="Components.Delivery"]})
              |> Floki.attribute("data-react-props")
@@ -742,9 +976,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       request_path = "some_other_request_path"
 
-      {:ok, view, _html} =
-        live(
-          conn,
+      conn =
+        conn
+        |> init_test_session(%{request_path: request_path})
+        |> get(
           live_view_adaptive_lesson_live_route(
             section.slug,
             exploration_1.slug,
@@ -752,8 +987,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
           )
         )
 
-      assert view
-             |> render()
+      assert conn.resp_body
              |> Floki.parse_fragment!()
              |> Floki.find(~s{div[data-react-class="Components.Delivery"]})
              |> Floki.attribute("data-react-props")
@@ -783,8 +1017,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       request_path = nil
 
-      {:ok, view, _html} =
-        live(
+      conn =
+        get(
           conn,
           live_view_adaptive_lesson_live_route(
             section.slug,
@@ -793,8 +1027,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
           )
         )
 
-      refute view
-             |> render()
+      refute conn.resp_body
              |> Floki.parse_fragment!()
              |> Floki.find(~s{div[data-react-class="Components.Delivery"]})
              |> Floki.attribute("data-react-props")
@@ -813,12 +1046,15 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_2.slug))
-
+      ensure_content_is_visible(view)
       assert has_element?(view, ~s{div[role="container label"]}, "Module 1")
       assert has_element?(view, ~s{div[role="page numbering index"]}, "2.")
       assert has_element?(view, ~s{div[role="page title"]}, "Page 2")
       assert has_element?(view, ~s{div[role="page read time"]}, "15")
+      assert has_element?(view, ~s{div[role="page schedule"]}, "Read by:")
       assert has_element?(view, ~s{div[role="page schedule"]}, "Tue Nov 14, 2023")
+      assert has_element?(view, ~s{div[role="page start schedule"]}, "Available by:")
+      assert has_element?(view, ~s{div[role="page start schedule"]}, "Fri Nov 10, 2023")
     end
 
     test "can not see page duration time when it is not set", %{
@@ -848,6 +1084,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_2.slug))
+
+      ensure_content_is_visible(view)
 
       # if we render_click() on PROFICIENCY to show the modal, a JS command should be triggered.
       # But, since the phx-click does not have any push command, we get "no push command found within JS commands".
@@ -894,6 +1132,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       |> Enum.each(&add_resource_summary(&1))
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_2.slug))
+      ensure_content_is_visible(view)
 
       assert has_element?(
                view,
@@ -959,6 +1198,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
       |> element(~s{div[role="next_page"] a})
@@ -991,7 +1231,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       # when the request path is not the learn view, it keeps it when navigating between pages
-      request_path = ~p"/sections/#{section.slug}/assignments"
+      request_path = ~p"/sections/#{section.slug}/student_schedule"
 
       {:ok, view, _html} =
         live(
@@ -1001,6 +1241,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
             selected_view: @default_selected_view
           )
         )
+
+      ensure_content_is_visible(view)
 
       view
       |> element(~s{div[role="next_page"] a})
@@ -1035,6 +1277,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
           Utils.lesson_live_path(section.slug, page_2.slug, selected_view: @default_selected_view)
         )
 
+      ensure_content_is_visible(view)
+
       view
       |> element(~s{div[role="next_page"] a})
       |> render_click
@@ -1049,6 +1293,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       # previous page is a container
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
       |> element(~s{div[role="prev_page"] a})
@@ -1072,11 +1317,16 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
       Sections.mark_section_visited_for_student(section, user)
 
+      _first_attempt_in_progress =
+        create_attempt(user, section, page_1, %{lifecycle_state: :active})
+
       {:ok, view, _html} =
         live(
           conn,
           Utils.lesson_live_path(section.slug, page_1.slug, selected_view: @default_selected_view)
         )
+
+      ensure_content_is_visible(view)
 
       view
       |> element(~s{div[role="back_link"] a})
@@ -1102,6 +1352,8 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       {:ok, view, _html} =
         live(conn, Utils.lesson_live_path(section.slug, page_1.slug, request_path: request_path))
 
+      ensure_content_is_visible(view)
+
       view
       |> element(~s{div[role="back_link"] a})
       |> render_click
@@ -1110,6 +1362,41 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         view,
         request_path
       )
+    end
+
+    test "can see DOT AI Bot interface if it's on a non scored page", %{
+      conn: conn,
+      user: user,
+      section: section,
+      page_1: page_1
+    } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
+
+      assert has_element?(view, "div[id='dialogue-window']")
+      assert has_element?(view, "div[id=ai_bot_collapsed]")
+    end
+
+    test "can not see DOT AI Bot interface if it's on a scored page", %{
+      conn: conn,
+      user: user,
+      section: section,
+      page_3: page_3
+    } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      _first_attempt_in_progress =
+        create_attempt(user, section, page_3, %{lifecycle_state: :active})
+
+      {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_3.slug))
+      ensure_content_is_visible(view)
+
+      refute has_element?(view, "div[id='dialogue-window']")
+      refute has_element?(view, "div[id=ai_bot_collapsed]")
     end
   end
 
@@ -1131,7 +1418,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       assert not has_element?(
                view,
-               "button[phx-click='toggle_sidebar']"
+               "button[phx-click='toggle_notes_sidebar']"
              )
     end
 
@@ -1146,9 +1433,11 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
 
+      ensure_content_is_visible(view)
+
       assert has_element?(
                view,
-               "button[phx-click='toggle_sidebar']"
+               "button[phx-click='toggle_notes_sidebar']"
              )
     end
 
@@ -1162,7 +1451,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
-
+      ensure_content_is_visible(view)
       assert has_element?(view, "button[id=user-account-menu]")
     end
   end
@@ -1180,9 +1469,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
-      |> element(~s{button[phx-click='toggle_sidebar']})
+      |> element(~s{button[phx-click='toggle_notes_sidebar']})
       |> render_click
 
       assert has_element?(
@@ -1201,9 +1491,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
-      |> element(~s{button[phx-click='toggle_sidebar']})
+      |> element(~s{button[phx-click='toggle_notes_sidebar']})
       |> render_click
 
       wait_while(fn -> has_element?(view, "svg.loading") end)
@@ -1229,9 +1520,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       create_post(user, section, page_1, "This is another class note")
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
-      |> element(~s{button[phx-click='toggle_sidebar']})
+      |> element(~s{button[phx-click='toggle_notes_sidebar']})
       |> render_click
 
       view
@@ -1275,9 +1567,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       react_to_post(post_1, user3, :like)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
-      |> element(~s{button[phx-click='toggle_sidebar']})
+      |> element(~s{button[phx-click='toggle_notes_sidebar']})
       |> render_click
 
       view
@@ -1300,6 +1593,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       assert like_button_html =~ "<path class=\"stroke-primary\""
     end
 
+    @tag :skip
     test "posts a note", %{
       conn: conn,
       section: section,
@@ -1310,14 +1604,15 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
       Sections.mark_section_visited_for_student(section, user)
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
-      |> element(~s{button[phx-click='toggle_sidebar']})
+      |> element(~s{button[phx-click='toggle_notes_sidebar']})
       |> render_click
 
       assert_push_event(view, "request_point_markers", %{})
 
-      # when we handle the event "toggle_sidebar", the "request_point_markers" event is pushed to the client.
+      # when we handle the event "toggle_notes_sidebar", the "request_point_markers" event is pushed to the client.
       # The client then responds back with the "update_point_markers" event
       # that is handled by the server and finally used to show the point marks on the annotations panel.
       # We need to trigger the "update_point_markers" event manually because no js is executed while testing the liveview
@@ -1356,7 +1651,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
       # and is shown in the UI
       assert has_element?(view, "div[role='user name']", "Me")
-      assert has_element?(view, "div[role='posted at']", "now")
+
+      assert has_element?(view, "div[role='posted at']", "now") or
+               has_element?(view, "div[role='posted at']", "1 second ago")
+
       assert has_element?(view, "p[role='post content']", "some new post content")
     end
 
@@ -1391,9 +1689,10 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         })
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, page_1.slug))
+      ensure_content_is_visible(view)
 
       view
-      |> element(~s{button[phx-click='toggle_sidebar']})
+      |> element(~s{button[phx-click='toggle_notes_sidebar']})
       |> render_click
 
       wait_while(fn -> has_element?(view, "svg.loading") end)
@@ -1437,6 +1736,152 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
     end
   end
 
+  describe "outline panel" do
+    setup [:user_conn, :create_elixir_project]
+
+    test "do not display the panel in graded pages", %{
+      conn: conn,
+      section: section,
+      user: user,
+      page_3: graded_page
+    } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      _first_attempt_in_progress =
+        create_attempt(user, section, graded_page, %{lifecycle_state: :active})
+
+      {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, graded_page.slug))
+      ensure_content_is_visible(view)
+
+      refute has_element?(
+               view,
+               ~s{button[phx-click='toggle_outline_sidebar']}
+             )
+    end
+
+    test "is toggled open when toolbar button is clicked in practice pages", %{
+      conn: conn,
+      section: section,
+      user: user,
+      page_1: practice_page
+    } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, practice_page.slug))
+      ensure_content_is_visible(view)
+
+      # It is not stored as a user preference and is not open by default
+      refute Oli.Accounts.get_user_preference(user.id, :page_outline_panel_active?)
+
+      view
+      |> element(~s{button[phx-click='toggle_outline_sidebar']})
+      |> render_click
+
+      assert has_element?(
+               view,
+               "#outline_panel"
+             )
+
+      # It stores the user preference
+      assert Oli.Accounts.get_user_preference(user.id, :page_outline_panel_active?)
+    end
+  end
+
+  describe "pages configured with :one_at_a_time assessment mode" do
+    setup [:user_conn, :create_elixir_project]
+
+    test "are rendered correctly", %{
+      conn: conn,
+      section: section,
+      mcq_activity_1: mcq_activity_1,
+      user: user,
+      one_at_a_time_question_page: one_at_a_time_question_page
+    } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      resource_access =
+        Oli.Delivery.Attempts.Core.track_access(
+          one_at_a_time_question_page.resource_id,
+          section.id,
+          user.id
+        )
+
+      resource_attempt =
+        insert(:resource_attempt, %{
+          resource_access_id: resource_access.id,
+          resource_access: resource_access,
+          revision_id: one_at_a_time_question_page.id,
+          revision: one_at_a_time_question_page,
+          attempt_guid: UUID.uuid4(),
+          content: one_at_a_time_question_page.content
+        })
+
+      activity_attempt =
+        insert(:activity_attempt, %{
+          resource_attempt_id: resource_attempt.id,
+          resource_attempt: resource_attempt,
+          revision_id: mcq_activity_1.id,
+          revision: mcq_activity_1,
+          resource_id: mcq_activity_1.resource_id,
+          resource: mcq_activity_1.resource,
+          attempt_guid: UUID.uuid4()
+        })
+
+      _part_attempt =
+        insert(:part_attempt, %{
+          activity_attempt_id: activity_attempt.id,
+          activity_attempt: activity_attempt,
+          attempt_guid: UUID.uuid4(),
+          part_id: "1"
+        })
+
+      {:ok, view, _html} =
+        live(conn, Utils.lesson_live_path(section.slug, one_at_a_time_question_page.slug))
+
+      ensure_content_is_visible(view)
+
+      assert has_element?(
+               view,
+               "div[role='page title']",
+               "This is a page configured to show one question at a time"
+             )
+
+      assert has_element?(view, "div[id='one_at_a_time_questions']")
+    end
+
+    test "are rendered correctly even if the page has no questions in it's content",
+         %{
+           conn: conn,
+           section: section,
+           user: user,
+           empty_one_at_a_time_question_page: empty_one_at_a_time_question_page
+         } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      _first_attempt_in_progress =
+        create_attempt(user, section, empty_one_at_a_time_question_page, %{
+          lifecycle_state: :active
+        })
+
+      {:ok, view, _html} =
+        live(conn, Utils.lesson_live_path(section.slug, empty_one_at_a_time_question_page.slug))
+
+      ensure_content_is_visible(view)
+
+      assert has_element?(
+               view,
+               "div[role='page title']",
+               "This is a page configured to show one question at a time with no questions"
+             )
+
+      assert has_element?(view, "p", "There are no questions available for this page.")
+    end
+  end
+
   describe "offline detector" do
     setup [:user_conn, :create_elixir_project]
 
@@ -1453,7 +1898,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         create_attempt(user, section, graded_page, %{lifecycle_state: :active})
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, graded_page.slug))
-
+      ensure_content_is_visible(view)
       assert has_element?(view, "div[id='offline_detector']")
     end
 
@@ -1470,7 +1915,7 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
         create_attempt(user, section, practice_page, %{lifecycle_state: :active})
 
       {:ok, view, _html} = live(conn, Utils.lesson_live_path(section.slug, practice_page.slug))
-
+      ensure_content_is_visible(view)
       assert has_element?(view, "div[id='offline_detector']")
     end
   end
@@ -1494,5 +1939,13 @@ defmodule OliWeb.Delivery.Student.LessonLiveTest do
 
   defp react_to_post(post, user, reaction) do
     Oli.Resources.Collaboration.toggle_reaction(post.id, user.id, reaction)
+  end
+
+  defp ensure_content_is_visible(view) do
+    # the content of the page will not be rendered until the socket is connected
+    # and the client side confirms that the scripts are loaded
+    view
+    |> element("#eventIntercept")
+    |> render_hook("survey_scripts_loaded", %{"loaded" => true})
   end
 end

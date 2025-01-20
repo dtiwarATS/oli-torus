@@ -4,7 +4,6 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
   alias Oli.Delivery.Sections
   alias OliWeb.Backgrounds
   alias OliWeb.Common.{Params, SearchInput}
-  alias OliWeb.Components.Delivery.Utils
   alias OliWeb.Icons
 
   import Ecto.Query, warn: false
@@ -12,14 +11,17 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
 
   @default_params %{text_search: "", sidebar_expanded: true}
 
+  @context_instructor_roles [
+    Lti_1p3.Tool.ContextRoles.get_role(:context_instructor)
+  ]
+
   @impl Phoenix.LiveView
   def mount(_params, _session, %{assigns: %{current_user: current_user}} = socket)
       when not is_nil(current_user) do
     sections =
-      Sections.list_user_open_and_free_sections(current_user)
-      |> add_user_role(current_user)
+      current_user.id
+      |> sections_where_user_is_instructor()
       |> add_instructors()
-      |> filter_by_role(:instructor)
 
     {:ok,
      assign(socket,
@@ -29,7 +31,7 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
      )}
   end
 
-  def mount(_params, _session, %{assigns: %{has_admin_role: true}} = socket) do
+  def mount(_params, _session, %{assigns: %{is_admin: true}} = socket) do
     # admin case...
 
     {:ok, assign(socket, active_workspace: :instructor)}
@@ -38,15 +40,8 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
   def mount(_params, _session, socket) do
     # no current user case...
 
-    app_conf = %{phoenix_router: OliWeb.Router, phoenix_endpoint: OliWeb.Endpoint, otp_app: :oli}
-    secret_key_base = Application.get_env(:oli, OliWeb.Endpoint)[:secret_key_base]
-
-    provider_links =
-      %Plug.Conn{}
-      |> Map.replace(:private, app_conf)
-      |> Map.replace(:secret_key_base, secret_key_base)
-      |> OliWeb.Pow.PowHelpers.use_pow_config(:user)
-      |> OliWeb.Pow.PowHelpers.provider_links()
+    authentication_providers =
+      Oli.AssentAuth.UserAssentAuth.authentication_providers() |> Keyword.keys()
 
     {:ok,
      assign(socket,
@@ -54,7 +49,7 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
        active_workspace: :instructor,
        header_enabled?: false,
        footer_enabled?: false,
-       provider_links: provider_links
+       authentication_providers: authentication_providers
      )}
   end
 
@@ -75,7 +70,7 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
 
   @impl Phoenix.LiveView
 
-  def render(%{has_admin_role: true} = assigns) do
+  def render(%{is_admin: true} = assigns) do
     ~H"""
     <div class="dark:bg-[#0F0D0F] bg-[#F3F4F8]">
       <div class="relative flex items-center h-[247px]">
@@ -112,7 +107,7 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
 
   def render(%{current_user: nil} = assigns) do
     ~H"""
-    <div class="flex justify-center items-center min-h-screen">
+    <div class="flex-1 flex justify-center items-center min-h-screen">
       <div class="absolute h-full w-full top-0 left-0">
         <Backgrounds.instructor_workspace_sign_in />
       </div>
@@ -146,79 +141,15 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
           </div>
         </div>
         <div class="lg:w-1/2 flex items-center justify-center">
-          <div class="w-[360px] lg:w-96 bg-neutral-700 rounded-md">
-            <div class="text-center text-white text-xl font-normal font-['Open Sans'] leading-7 py-8">
-              Instructor Sign In
-            </div>
-            <%= for link <- @provider_links, do: raw(link) %>
-            <div
-              :if={@provider_links != []}
-              class="my-4 text-center text-white text-base font-normal font-['Open Sans'] leading-snug"
-            >
-              OR
-            </div>
-            <%= form_for :user, Routes.session_path(@socket, :signin, type: :user, after_sign_in_target: :instructor_workspace), [as: :user], fn f -> %>
-              <div class="flex flex-col gap-y-2">
-                <div class="w-80 h-11 m-auto form-label-group border-none">
-                  <%= email_input(f, Pow.Ecto.Schema.user_id_field(@socket),
-                    class:
-                      "form-control placeholder:text-zinc-300 !pl-6 h-11 !bg-stone-900 !rounded-md !border !border-zinc-300 !text-zinc-300 text-base font-normal font-['Open Sans'] leading-snug",
-                    placeholder: "Email",
-                    required: true,
-                    autofocus: true
-                  ) %>
-                  <%= error_tag(f, Pow.Ecto.Schema.user_id_field(@socket)) %>
-                </div>
-                <div class="w-80 h-11 m-auto form-label-group border-none">
-                  <%= password_input(f, :password,
-                    class:
-                      "form-control placeholder:text-zinc-300 !pl-6 h-11 !bg-stone-900 !rounded-md !border !border-zinc-300 !text-zinc-300 text-base font-normal font-['Open Sans'] leading-snug",
-                    placeholder: "Password",
-                    required: true
-                  ) %>
-                  <%= error_tag(f, :password) %>
-                </div>
-              </div>
-              <div class="mb-4 d-flex flex-row justify-between px-8 pb-2 pt-6">
-                <%= unless Application.fetch_env!(:oli, :always_use_persistent_login_sessions) do %>
-                  <div class="flex items-center gap-x-2 custom-control custom-checkbox">
-                    <%= checkbox(f, :persistent_session,
-                      class: "w-4 h-4 !border !border-white",
-                      style: "background-color: #171717"
-                    ) %>
-                    <%= label(f, :persistent_session, "Remember me",
-                      class:
-                        "text-center text-white text-base font-normal font-['Open Sans'] leading-snug"
-                    ) %>
-                  </div>
-                <% else %>
-                  <div></div>
-                <% end %>
-                <div class="custom-control">
-                  <%= link("Forgot password?",
-                    to: Routes.pow_reset_password_reset_password_path(@socket, :new),
-                    tabindex: "1",
-                    class:
-                      "text-center text-[#4ca6ff] text-base font-bold font-['Open Sans'] leading-snug"
-                  ) %>
-                </div>
-              </div>
-
-              <div class="flex flex-col justify-center items-center gap-10 mb-16">
-                <%= submit("Sign In",
-                  class:
-                    "w-80 h-11 bg-[#0062f2] mx-auto text-white text-xl font-normal leading-7 rounded-md btn btn-md btn-block mt-2"
-                ) %>
-                <div class="w-[341px] h-[0px] border border-white"></div>
-                <.link
-                  href={Routes.pow_registration_path(OliWeb.Endpoint, :new)}
-                  class="text-center text-[#4ca6ff] text-xl font-bold font-['Open Sans'] leading-7"
-                >
-                  Create Account
-                </.link>
-              </div>
-            <% end %>
-          </div>
+          <Components.Auth.login_form
+            title="Instructor Sign In"
+            form={@form}
+            action={~p"/users/log_in?#{[request_path: ~p"/workspaces/instructor"]}"}
+            registration_link={~p"/users/register"}
+            reset_password_link={~p"/users/reset_password"}
+            authentication_providers={@authentication_providers}
+            auth_provider_path_fn={&~p"/users/auth/#{&1}/new"}
+          />
         </div>
       </div>
     </div>
@@ -261,7 +192,7 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
             To create course sections,
             <button
               onclick="window.showHelpModal();"
-              class="text-blue-400 text-base font-bold font-['Open Sans'] tracking-tight cursor-pointer"
+              class="text-[#006CD9] hover:text-[#1B67B2] dark:text-[#4CA6FF] dark:hover:text-[#99CCFF] hover:underline text-base font-bold font-['Open Sans'] tracking-tight cursor-pointer"
             >
               contact support.
             </button>
@@ -279,7 +210,7 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
             ]}
           >
             <div class="w-3 h-5 relative">
-              <div class="w-5 h-5 left-[-8px] top-0 absolute text-white"><Icons.plus /></div>
+              <Icons.plus class="w-5 h-5 left-[-8px] top-0 absolute" path_class="stroke-white" />
             </div>
             <div class="text-white text-base font-normal font-['Inter'] leading-normal whitespace-nowrap">
               Create New Section
@@ -328,7 +259,7 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
       phx-mounted={
         JS.transition(
           {"ease-out duration-300", "opacity-0 -translate-x-1/2", "opacity-100 translate-x-0"},
-          time: 300 + @index * 60
+          time: if(@index < 6, do: 100 + @index * 20, else: 240)
         )
       }
       class="opacity-0 flex flex-col w-96 h-[500px] rounded-lg border-2 border-gray-700 transition-all overflow-hidden bg-white"
@@ -377,15 +308,6 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
      )}
   end
 
-  defp add_user_role([], _user), do: []
-
-  defp add_user_role(sections, user) do
-    sections
-    |> Enum.map(fn s ->
-      Map.merge(s, %{user_role: Utils.user_role(s, user) |> Atom.to_string()})
-    end)
-  end
-
   defp add_instructors([]), do: []
 
   defp add_instructors(sections) do
@@ -396,9 +318,6 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
       Map.merge(section, %{instructors: Map.get(instructors_per_section, section.id, [])})
     end)
   end
-
-  defp filter_by_role(sections, :instructor),
-    do: Enum.filter(sections, fn s -> s.user_role == "instructor" end)
 
   defp maybe_filter_by_text(sections, nil), do: sections
   defp maybe_filter_by_text(sections, ""), do: sections
@@ -420,11 +339,8 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
     end)
   end
 
-  defp get_course_url(%{user_role: "student", slug: slug}, sidebar_expanded),
-    do: ~p"/sections/#{slug}?#{%{sidebar_expanded: sidebar_expanded}}"
-
   defp get_course_url(%{slug: slug}, sidebar_expanded),
-    do: ~p"/sections/#{slug}/instructor_dashboard/manage?#{%{sidebar_expanded: sidebar_expanded}}"
+    do: ~p"/sections/#{slug}/manage?#{%{sidebar_expanded: sidebar_expanded}}"
 
   defp decode_params(params) do
     %{
@@ -432,5 +348,9 @@ defmodule OliWeb.Workspaces.Instructor.IndexLive do
       sidebar_expanded:
         Params.get_boolean_param(params, "sidebar_expanded", @default_params.sidebar_expanded)
     }
+  end
+
+  defp sections_where_user_is_instructor(user_id) do
+    Sections.get_open_and_free_active_sections_by_roles(user_id, @context_instructor_roles)
   end
 end

@@ -1,16 +1,12 @@
 defmodule OliWeb.Sections.AssessmentSettings.SettingsLive do
-  use Phoenix.LiveView
+  use OliWeb, :live_view
   use OliWeb.Common.Modal
 
-  import Ecto.Query
-  alias Oli.Repo
-
-  alias OliWeb.Sections.Mount
-  alias OliWeb.Common.{SessionContext, Breadcrumb}
-  alias Oli.Publishing.DeliveryResolver
-  alias Oli.Delivery.{Settings, Sections}
+  alias Oli.Delivery.Sections
+  alias Oli.Delivery.Settings.AssessmentSettings
+  alias OliWeb.Common.Breadcrumb
   alias OliWeb.Router.Helpers, as: Routes
-  alias Oli.Delivery.Settings.StudentException
+  alias OliWeb.Sections.Mount
 
   @impl true
   def mount(%{"section_slug" => section_slug} = _params, session, socket) do
@@ -23,11 +19,10 @@ defmodule OliWeb.Sections.AssessmentSettings.SettingsLive do
           section
           |> Oli.Repo.preload([:base_project, :root_section_resource])
 
-        student_exceptions = get_student_exceptions(section.id)
+        student_exceptions = AssessmentSettings.get_student_exceptions(section.id)
 
         {:ok,
          assign(socket,
-           ctx: SessionContext.init(socket, session, user: current_user),
            current_user: current_user,
            preview_mode: socket.assigns[:live_action] == :preview,
            title: "Assessment Settings",
@@ -37,17 +32,11 @@ defmodule OliWeb.Sections.AssessmentSettings.SettingsLive do
              Sections.enrolled_students(section.slug)
              |> Enum.reject(fn s -> s.user_role_id != 4 end)
              |> Enum.sort(),
-           assessments: get_assessments(section.slug, student_exceptions),
+           assessments: AssessmentSettings.get_assessments(section.slug, student_exceptions),
            breadcrumbs: [
              Breadcrumb.new(%{
                full_title: "Manage Section",
-               link:
-                 Routes.live_path(
-                   OliWeb.Endpoint,
-                   OliWeb.Delivery.InstructorDashboard.InstructorDashboardLive,
-                   section.slug,
-                   :manage
-                 )
+               link: ~p"/sections/#{section.slug}/manage"
              }),
              Breadcrumb.new(%{
                full_title: "Assessments settings"
@@ -59,26 +48,14 @@ defmodule OliWeb.Sections.AssessmentSettings.SettingsLive do
 
   @impl Phoenix.LiveView
   def handle_params(%{"active_tab" => "settings"} = params, _, socket) do
-    socket =
-      socket
-      |> assign(
-        params: params,
-        active_tab: :settings,
-        update_sort_order: true
-      )
-
+    socket = assign(socket, params: params, active_tab: :settings, update_sort_order: true)
     {:noreply, socket}
   end
 
   @impl true
   def handle_params(%{"active_tab" => "student_exceptions"} = params, _, socket) do
     socket =
-      socket
-      |> assign(
-        params: params,
-        active_tab: :student_exceptions,
-        update_sort_order: true
-      )
+      assign(socket, params: params, active_tab: :student_exceptions, update_sort_order: true)
 
     {:noreply, socket}
   end
@@ -202,6 +179,17 @@ defmodule OliWeb.Sections.AssessmentSettings.SettingsLive do
           else: assessment
       end)
 
+    sr =
+      Oli.Delivery.Sections.get_section_resource(
+        socket.assigns.section.id,
+        updated_assessment.resource_id
+      )
+
+    Oli.Delivery.DepotCoordinator.update_all(
+      Oli.Delivery.Sections.SectionResourceDepot.depot_desc(),
+      [sr]
+    )
+
     {:noreply,
      socket
      |> assign(
@@ -256,29 +244,6 @@ defmodule OliWeb.Sections.AssessmentSettings.SettingsLive do
   end
 
   defp is_active_tab?(tab, active_tab), do: tab == active_tab
-
-  defp get_assessments(section_slug, student_exceptions) do
-    DeliveryResolver.graded_pages_revisions_and_section_resources(section_slug)
-    |> Enum.with_index()
-    |> Enum.map(fn {{rev, sr}, index} ->
-      Settings.combine(rev, sr, nil)
-      |> Map.merge(%{
-        index: index + 1,
-        name: rev.title,
-        scheduling_type: sr.scheduling_type,
-        password: sr.password,
-        exceptions_count:
-          Enum.count(student_exceptions, fn se -> se.resource_id == rev.resource_id end)
-      })
-    end)
-  end
-
-  defp get_student_exceptions(section_id) do
-    StudentException
-    |> where(section_id: ^section_id)
-    |> preload(:user)
-    |> Repo.all()
-  end
 
   defp flash_message(assigns) do
     ~H"""

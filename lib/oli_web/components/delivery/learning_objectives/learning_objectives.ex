@@ -1,11 +1,12 @@
 defmodule OliWeb.Components.Delivery.LearningObjectives do
   use OliWeb, :live_component
 
+  import OliWeb.Components.Delivery.Buttons, only: [instructor_dasboard_toggle_chevron: 1]
+
   alias OliWeb.Common.InstructorDashboardPagedTable
   alias OliWeb.Common.Params
   alias OliWeb.Common.SearchInput
   alias OliWeb.Components.Delivery.CardHighlights
-  alias Oli.Delivery.Sections.Section
   alias OliWeb.Delivery.LearningObjectives.ObjectivesTableModel
   alias OliWeb.Router.Helpers, as: Routes
   alias Phoenix.LiveView.JS
@@ -33,15 +34,17 @@ defmodule OliWeb.Components.Delivery.LearningObjectives do
         %{
           objectives_tab: objectives_tab,
           params: params,
-          section: section
+          section_slug: section_slug,
+          v25_migration: v25_migration
         } = assigns,
         socket
       ) do
     params = decode_params(params)
 
-    {total_count, rows} = apply_filters(objectives_tab.objectives, params)
+    {total_count, rows} =
+      apply_filters(objectives_tab.objectives, params, assigns[:patch_url_type])
 
-    {:ok, objectives_table_model} = ObjectivesTableModel.new(rows)
+    {:ok, objectives_table_model} = ObjectivesTableModel.new(rows, assigns[:patch_url_type])
 
     objectives_table_model =
       Map.merge(objectives_table_model, %{
@@ -92,9 +95,9 @@ defmodule OliWeb.Components.Delivery.LearningObjectives do
        params: params,
        student_id: assigns[:student_id],
        patch_url_type: assigns.patch_url_type,
-       section_slug: section.slug,
+       section_slug: section_slug,
        units_modules: objectives_tab.filter_options,
-       filter_disabled?: filter_by_module_disabled?(section),
+       filter_disabled?: filter_by_module_disabled?(v25_migration),
        view: assigns[:view],
        proficiency_options: proficiency_options,
        selected_proficiency_options: selected_proficiency_options,
@@ -261,14 +264,7 @@ defmodule OliWeb.Components.Delivery.LearningObjectives do
             Proficiency is <%= show_proficiency_selected_values(@selected_values) %>
           </span>
         </div>
-        <div>
-          <div id={"#{@id}-down-icon"}>
-            <Icons.chevron_down />
-          </div>
-          <div class="hidden" id={"#{@id}-up-icon"}>
-            <Icons.chevron_down class="fill-blue-400 rotate-180" />
-          </div>
-        </div>
+        <.instructor_dasboard_toggle_chevron id={@id} map_values={@selected_values} />
       </div>
       <div class="relative">
         <div
@@ -294,7 +290,7 @@ defmodule OliWeb.Components.Delivery.LearningObjectives do
                 label={option.name}
                 checked={option.id in @selected_proficiency_ids}
                 type="checkbox"
-                class_label="text-zinc-900 text-xs font-normal leading-none dark:text-white"
+                label_class="text-zinc-900 text-xs font-normal leading-none dark:text-white"
               />
             </.form>
           </div>
@@ -563,7 +559,16 @@ defmodule OliWeb.Components.Delivery.LearningObjectives do
     end)
   end
 
-  defp apply_filters(objectives, params) do
+  defp apply_filters(objectives, params, :instructor_dashboard) do
+    # Only show top-level objectives on initial table
+    objectives
+    |> Enum.filter(fn o -> o.resource_id == o.objective_resource_id end)
+    |> do_apply_filters(params)
+  end
+
+  defp apply_filters(objectives, params, _), do: do_apply_filters(objectives, params)
+
+  defp do_apply_filters(objectives, params) do
     objectives =
       objectives
       |> maybe_filter_by_text(params.text_search)
@@ -572,7 +577,14 @@ defmodule OliWeb.Components.Delivery.LearningObjectives do
       |> maybe_filter_by_card(params.selected_card_value)
       |> sort_by(params.sort_by, params.sort_order)
 
-    {length(objectives), objectives |> Enum.drop(params.offset) |> Enum.take(params.limit)}
+    total_count = length(objectives)
+
+    rows =
+      objectives
+      |> Enum.drop(params.offset)
+      |> Enum.take(params.limit)
+
+    {total_count, rows}
   end
 
   defp sort_by(objectives, sort_by, sort_order) do
@@ -668,11 +680,9 @@ defmodule OliWeb.Components.Delivery.LearningObjectives do
     }
   end
 
-  _docp = """
-  Returns true if the filter by module feature is disabled for the section.
-  This happens when the contained objectives for the section were not yet created.
-  """
-
-  defp filter_by_module_disabled?(%Section{v25_migration: :done}), do: false
+  # Returns true if the filter by module feature is disabled for the section.
+  # This happens when the contained objectives for the section were not yet created.
+  defp filter_by_module_disabled?(v25_migration)
+  defp filter_by_module_disabled?(:done), do: false
   defp filter_by_module_disabled?(_), do: true
 end

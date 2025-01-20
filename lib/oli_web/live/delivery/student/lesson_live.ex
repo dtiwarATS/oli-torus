@@ -1,22 +1,28 @@
 defmodule OliWeb.Delivery.Student.LessonLive do
   use OliWeb, :live_view
+  use Appsignal.Instrumentation.Decorators
 
   import OliWeb.Delivery.Student.Utils,
-    only: [page_header: 1, scripts: 1, references: 1, reset_attempts_button: 1]
+    only: [
+      page_header: 1,
+      scripts: 1,
+      references: 1,
+      reset_attempts_button: 1,
+      emit_page_viewed_event: 1
+    ]
 
-  import Ecto.Query
-
+  alias Oli.Accounts
   alias Oli.Accounts.User
   alias Oli.Delivery.Attempts.PageLifecycle
   alias Oli.Delivery.Attempts.PageLifecycle.FinalizationSummary
-  alias Oli.Delivery.Metrics
-  alias Oli.Delivery.Sections
-  alias Oli.Delivery.Settings
   alias Oli.Publishing.DeliveryResolver, as: Resolver
   alias Oli.Resources.Collaboration
   alias Oli.Resources.Collaboration.CollabSpaceConfig
   alias OliWeb.Delivery.Student.Utils
   alias OliWeb.Delivery.Student.Lesson.Annotations
+  alias OliWeb.Delivery.Student.Lesson.Components.OutlineComponent
+  alias Oli.Delivery.{Hierarchy, Metrics, Sections, Settings}
+  alias Oli.Delivery.Sections.SectionCache
 
   require Logger
 
@@ -30,13 +36,35 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     current_user: {[:id, :name, :email], %User{}}
   }
 
-  def mount(_params, _session, %{assigns: %{view: :practice_page}} = socket) do
-    %{current_user: current_user, section: section, page_context: page_context} = socket.assigns
-    is_instructor = Sections.has_instructor_role?(current_user, section.slug)
+  @default_selected_view :gallery
 
+  @decorate transaction_event()
+  def mount(params, _session, %{assigns: %{view: :practice_page}} = socket) do
     # when updating to Liveview 0.20 we should replace this with assign_async/3
     # https://hexdocs.pm/phoenix_live_view/Phoenix.LiveView.html#assign_async/3
     if connected?(socket) do
+      thin_hierarchy =
+        socket.assigns.section
+        |> get_or_compute_full_hierarchy()
+        |> Hierarchy.thin_hierarchy(
+          [
+            "id",
+            "slug",
+            "title",
+            "numbering",
+            "resource_id",
+            "resource_type_id",
+            "children",
+            "graded",
+            "section_resource"
+          ],
+          # only include units, modules, sections or pages until level 3
+          fn node -> node["numbering"]["level"] <= 3 end
+        )
+
+      %{current_user: current_user, section: section, page_context: page_context} = socket.assigns
+      is_instructor = Sections.has_instructor_role?(current_user, section.slug)
+
       async_load_annotations(
         section,
         page_context.page.resource_id,
@@ -46,128 +74,152 @@ defmodule OliWeb.Delivery.Student.LessonLive do
         nil
       )
 
-      emit_page_viewed_event(socket)
       send(self(), :gc)
-    end
 
-    {:ok,
-     socket
-     |> assign_html_and_scripts()
-     |> annotations_assigns(page_context.collab_space_config, is_instructor)
-     |> assign(is_instructor: is_instructor, page_resource_id: page_context.page.resource_id)
-     |> assign_objectives()
-     |> slim_assigns(), temporary_assigns: [scripts: [], html: [], page_context: %{}]}
+      socket =
+        socket
+        |> emit_page_viewed_event()
+        |> assign_html_and_scripts()
+        |> annotations_assigns(page_context.collab_space_config, is_instructor)
+        |> assign(
+          is_instructor: is_instructor,
+          active_sidebar_panel:
+            if(
+              Accounts.get_user_preference(
+                current_user.id,
+                :page_outline_panel_active?,
+                false
+              ),
+              do: :outline,
+              else: nil
+            ),
+          selected_view: get_selected_view(params),
+          page_resource_id: page_context.page.resource_id
+        )
+        |> assign_objectives()
+        |> slim_assigns()
+
+      script_sources =
+        Enum.map(socket.assigns.scripts, fn script -> "/js/#{script}" end)
+
+      {:ok, push_event(socket, "load_survey_scripts", %{script_sources: script_sources}),
+       temporary_assigns: [hierarchy: thin_hierarchy]}
+
+      # These temp assigns were disabled in MER-3672
+      #  temporary_assigns: [scripts: [], html: [], page_context: %{}]}
+    else
+      {:ok, socket}
+    end
   end
 
   def mount(
         _params,
         _session,
-        %{assigns: %{view: :graded_page, page_context: %{progress_state: progress_state}}} =
+        %{assigns: %{view: :graded_page}} =
           socket
-      )
-      when progress_state in [:revised, :in_progress] do
+      ) do
     %{page_context: page_context} = socket.assigns
 
     if connected?(socket) do
-      emit_page_viewed_event(socket)
       send(self(), :gc)
+      resource_attempt = hd(page_context.resource_attempts)
+
+      effective_end_time =
+        Settings.determine_effective_deadline(resource_attempt, page_context.effective_settings)
+        |> to_epoch()
+
+      auto_submit = page_context.effective_settings.late_submit == :disallow
+
+      now = DateTime.utc_now() |> to_epoch
+
+      attempt_expired_auto_submit =
+        now > effective_end_time and auto_submit and !page_context.review_mode
+
+      socket =
+        socket
+        |> emit_page_viewed_event()
+        |> assign_html_and_scripts()
+        |> assign_objectives()
+        |> maybe_assign_questions(page_context.effective_settings.assessment_mode)
+        |> assign(
+          revision_slug: page_context.page.slug,
+          attempt_guid: hd(page_context.resource_attempts).attempt_guid,
+          effective_end_time: effective_end_time,
+          auto_submit: auto_submit,
+          time_limit: page_context.effective_settings.time_limit,
+          grace_period: page_context.effective_settings.grace_period,
+          attempt_start_time: resource_attempt.inserted_at |> to_epoch,
+          review_mode: page_context.review_mode
+        )
+        |> slim_assigns()
+        |> assign(attempt_expired_auto_submit: attempt_expired_auto_submit)
+
+      script_sources =
+        Enum.map(socket.assigns.scripts, fn script -> "/js/#{script}" end)
+
+      {:ok,
+       push_event(socket, "load_survey_scripts", %{
+         script_sources: script_sources
+       })}
+
+      # These temp assigns were disabled in MER-3672
+      #  , temporary_assigns: [scripts: [], html: [], page_context: %{}]}
+    else
+      {:ok, socket}
     end
-
-    resource_attempt = hd(page_context.resource_attempts)
-
-    effective_end_time =
-      Settings.determine_effective_deadline(resource_attempt, page_context.effective_settings)
-      |> to_epoch()
-
-    {:ok,
-     socket
-     |> assign_html_and_scripts()
-     |> assign_objectives()
-     |> assign(
-       revision_slug: page_context.page.slug,
-       attempt_guid: hd(page_context.resource_attempts).attempt_guid,
-       effective_end_time: effective_end_time,
-       auto_submit: page_context.effective_settings.late_submit == :disallow,
-       time_limit: page_context.effective_settings.time_limit,
-       grace_period: page_context.effective_settings.grace_period,
-       attempt_start_time: resource_attempt.inserted_at |> to_epoch,
-       review_mode: page_context.review_mode
-     )
-     |> slim_assigns(), temporary_assigns: [scripts: [], html: [], page_context: %{}]}
   end
 
   def mount(
         _params,
         _session,
-        %{assigns: %{view: :adaptive_chromeless, page_context: %{progress_state: progress_state}}} =
+        %{assigns: %{view: :adaptive_chromeless}} =
           socket
-      )
-      when progress_state in [:revised, :in_progress] do
+      ) do
     if connected?(socket) do
-      emit_page_viewed_event(socket)
       send(self(), :gc)
-    end
 
-    {:ok, assign_scripts(socket) |> slim_assigns(),
-     layout: false, temporary_assigns: [scripts: [], page_context: %{}]}
+      socket =
+        socket
+        |> emit_page_viewed_event()
+        |> assign_scripts()
+        |> slim_assigns()
+
+      authoring_scripts =
+        Enum.map(socket.assigns.activity_types, fn at -> at.authoring_script end)
+
+      script_sources =
+        Enum.map(
+          socket.assigns.scripts ++
+            socket.assigns.part_scripts ++ ["delivery.js"] ++ authoring_scripts,
+          fn script ->
+            "/js/#{script}"
+          end
+        )
+
+      {:ok, push_event(socket, "load_survey_scripts", %{script_sources: script_sources}),
+       layout: false}
+
+      # These temp assigns were disabled in MER-3672
+      #  , temporary_assigns: [scripts: [], page_context: %{}]}
+    else
+      {:ok, socket}
+    end
   end
 
-  def handle_event(
-        "finalize_attempt",
-        _params,
-        %{
-          assigns: %{
-            section: section,
-            datashop_session_id: datashop_session_id,
-            request_path: request_path,
-            revision_slug: revision_slug,
-            attempt_guid: attempt_guid
-          }
-        } = socket
-      ) do
-    case PageLifecycle.finalize(section.slug, attempt_guid, datashop_session_id) do
-      {:ok,
-       %FinalizationSummary{
-         graded: true,
-         resource_access: %Oli.Delivery.Attempts.Core.ResourceAccess{id: id},
-         effective_settings: effective_settings
-       }} ->
-        # graded resource finalization success
-        section = Sections.get_section_by(slug: section.slug)
+  def mount(_params, _session, socket) do
+    {:ok, socket}
+  end
 
-        if section.grade_passback_enabled,
-          do: PageLifecycle.GradeUpdateWorker.create(section.id, id, :inline)
+  def handle_event("survey_scripts_loaded", %{"error" => _}, socket) do
+    {:noreply, assign(socket, error: true)}
+  end
 
-        redirect_to =
-          case effective_settings.review_submission do
-            :allow ->
-              Utils.review_live_path(section.slug, revision_slug, attempt_guid,
-                request_path: request_path
-              )
+  def handle_event("survey_scripts_loaded", _params, socket) do
+    {:noreply, assign(socket, scripts_loaded: true)}
+  end
 
-            _ ->
-              Utils.lesson_live_path(section.slug, revision_slug, request_path: request_path)
-          end
-
-        {:noreply, redirect(socket, to: redirect_to)}
-
-      {:ok, %FinalizationSummary{graded: false}} ->
-        {:noreply,
-         redirect(socket,
-           to: Utils.lesson_live_path(section.slug, revision_slug, request_path: request_path)
-         )}
-
-      {:error, {reason}}
-      when reason in [:already_submitted, :active_attempt_present, :no_more_attempts] ->
-        {:noreply, put_flash(socket, :error, "Unable to finalize page")}
-
-      e ->
-        error_msg = Kernel.inspect(e)
-        Logger.error("Page finalization error encountered: #{error_msg}")
-        Oli.Utils.Appsignal.capture_error(error_msg)
-
-        {:noreply, put_flash(socket, :error, "Unable to finalize page")}
-    end
+  def handle_event("finalize_attempt", _params, socket) do
+    finalize_attempt(socket)
   end
 
   def handle_event("update_point_markers", %{"point_markers" => point_markers}, socket) do
@@ -176,18 +228,35 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     {:noreply, assign_annotations(socket, point_markers: markers)}
   end
 
-  def handle_event("toggle_sidebar", _params, socket) do
-    %{show_sidebar: show_sidebar, selected_point: selected_point} = socket.assigns.annotations
+  def handle_event("toggle_outline_sidebar", _params, socket) do
+    active_sidebar_panel =
+      if socket.assigns.active_sidebar_panel != :outline, do: :outline, else: nil
+
+    Accounts.set_user_preference(
+      socket.assigns.current_user,
+      :page_outline_panel_active?,
+      active_sidebar_panel == :outline
+    )
+
+    {:noreply, assign(socket, active_sidebar_panel: active_sidebar_panel)}
+  end
+
+  def handle_event("toggle_notes_sidebar", _params, socket) do
+    active_sidebar_panel = if socket.assigns.active_sidebar_panel != :notes, do: :notes, else: nil
+
+    %{selected_point: selected_point} = socket.assigns.annotations
 
     {:noreply,
      socket
-     |> assign_annotations(show_sidebar: !show_sidebar)
+     |> assign(active_sidebar_panel: active_sidebar_panel)
      |> push_event("request_point_markers", %{})
      |> then(fn socket ->
-       if show_sidebar do
-         push_event(socket, "clear_highlighted_point_markers", %{})
-       else
-         push_event(socket, "highlight_point_marker", %{id: selected_point})
+       case active_sidebar_panel do
+         nil ->
+           push_event(socket, "clear_highlighted_point_markers", %{})
+
+         :notes ->
+           push_event(socket, "highlight_point_marker", %{id: selected_point})
        end
      end)}
   end
@@ -598,6 +667,10 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     end
   end
 
+  def handle_info({:disable_question_inputs, question_id}, socket) do
+    {:noreply, push_event(socket, "disable_question_inputs", %{"question_id" => question_id})}
+  end
+
   # handle assigns directly from async tasks
   def handle_info({ref, result}, socket) do
     Process.demonitor(ref, [:flush])
@@ -623,12 +696,78 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     {:noreply, socket}
   end
 
+  def handle_params(_params, _url, socket) do
+    if Map.has_key?(socket.assigns, :attempt_expired_auto_submit) and
+         socket.assigns.attempt_expired_auto_submit do
+      finalize_attempt(socket)
+    else
+      {:noreply, socket}
+    end
+  end
+
   def render(%{view: :practice_page, annotations: %{}} = assigns) do
     # For practice page the activity scripts and activity_bridge script are needed as soon as the page loads.
     ~H"""
     <Annotations.delete_post_modal />
+    <div id="sticky_panel" class="absolute top-4 right-0 z-40 h-full">
+      <div class="sticky top-20 right-0">
+        <div class={[
+          "absolute top-24",
+          if(@active_sidebar_panel == :outline, do: "right-[380px]"),
+          if(@active_sidebar_panel == :notes, do: "right-[505px]"),
+          if(@active_sidebar_panel == nil, do: "right-0")
+        ]}>
+          <div class="h-32 rounded-tl-xl rounded-bl-xl justify-start items-center inline-flex">
+            <div class={[
+              "px-2 py-6 bg-white dark:bg-black shadow flex-col justify-center gap-4 inline-flex",
+              if(@active_sidebar_panel,
+                do: "rounded-t-xl rounded-b-xl",
+                else: "rounded-tl-xl rounded-bl-xl"
+              )
+            ]}>
+              <Annotations.toggle_notes_button is_active={@active_sidebar_panel == :notes}>
+                <Annotations.annotations_icon />
+              </Annotations.toggle_notes_button>
 
-    <.page_content_with_sidebar_layout show_sidebar={@annotations.show_sidebar}>
+              <OutlineComponent.toggle_outline_button is_active={@active_sidebar_panel == :outline}>
+                <OutlineComponent.outline_icon />
+              </OutlineComponent.toggle_outline_button>
+            </div>
+          </div>
+        </div>
+
+        <%= case @active_sidebar_panel do %>
+          <% :notes -> %>
+            <Annotations.panel
+              section_slug={@section.slug}
+              collab_space_config={@collab_space_config}
+              create_new_annotation={@annotations.create_new_annotation}
+              annotations={@annotations.posts}
+              current_user={@current_user}
+              is_instructor={@is_instructor}
+              active_tab={@annotations.active_tab}
+              search_results={@annotations.search_results}
+              search_term={@annotations.search_term}
+              selected_point={@annotations.selected_point}
+            />
+          <% :outline -> %>
+            <.live_component
+              module={OutlineComponent}
+              id="outline_component"
+              hierarchy={@hierarchy}
+              section_slug={@section.slug}
+              section_id={@section.id}
+              user_id={@current_user.id}
+              page_resource_id={@page_resource_id}
+              selected_view={@selected_view}
+            />
+          <% nil -> %>
+            <div></div>
+        <% end %>
+      </div>
+    </div>
+
+    <.page_content_with_sidebar_layout active_sidebar_panel={@active_sidebar_panel}>
       <:header>
         <.page_header
           page_context={@page_context}
@@ -640,7 +779,7 @@ defmodule OliWeb.Delivery.Student.LessonLive do
       </:header>
 
       <div
-        id="eventIntercept"
+        id="page_content"
         class="content"
         phx-update="ignore"
         role="page content"
@@ -658,7 +797,7 @@ defmodule OliWeb.Delivery.Student.LessonLive do
         <.references ctx={@ctx} bib_app_params={@bib_app_params} />
       </div>
 
-      <:point_markers :if={@annotations.show_sidebar && @annotations.point_markers}>
+      <:point_markers :if={@active_sidebar_panel == :notes && @annotations.point_markers}>
         <Annotations.annotation_bubble
           point_marker={:page}
           selected={@annotations.selected_point == :page}
@@ -671,103 +810,85 @@ defmodule OliWeb.Delivery.Student.LessonLive do
           count={@annotations.post_counts && @annotations.post_counts[point_marker.id]}
         />
       </:point_markers>
-
-      <:sidebar_toggle>
-        <Annotations.toggle_notes_button>
-          <Annotations.annotations_icon />
-        </Annotations.toggle_notes_button>
-      </:sidebar_toggle>
-
-      <:sidebar>
-        <Annotations.panel
-          section_slug={@section.slug}
-          collab_space_config={@collab_space_config}
-          create_new_annotation={@annotations.create_new_annotation}
-          annotations={@annotations.posts}
-          current_user={@current_user}
-          is_instructor={@is_instructor}
-          active_tab={@annotations.active_tab}
-          search_results={@annotations.search_results}
-          search_term={@annotations.search_term}
-          selected_point={@annotations.selected_point}
-        />
-      </:sidebar>
     </.page_content_with_sidebar_layout>
-
-    <.scripts scripts={@scripts} user_token={@user_token} />
     """
   end
 
   def render(%{view: :practice_page} = assigns) do
     # For practice page the activity scripts and activity_bridge script are needed as soon as the page loads.
     ~H"""
-    <div class="flex-1 flex flex-col w-full overflow-auto">
-      <div class="flex-1 mt-20 px-[80px] relative">
-        <div class="container mx-auto max-w-[880px] pb-20">
-          <.page_header
-            page_context={@page_context}
-            ctx={@ctx}
-            objectives={@objectives}
-            index={@current_page["index"]}
-            container_label={Utils.get_container_label(@current_page["id"], @section)}
-          />
-
-          <div id="eventIntercept" class="content" phx-update="ignore" role="page content">
-            <%= raw(@html) %>
-            <div class="flex w-full justify-center">
-              <.reset_attempts_button
-                activity_count={@activity_count}
-                advanced_delivery={@advanced_delivery}
-                page_context={@page_context}
-                section_slug={@section.slug}
-              />
+    <div id="sticky_panel" class="absolute top-4 right-0 z-50 h-full">
+      <div class="sticky ml-auto top-20 right-0">
+        <div class={[
+          "absolute top-24",
+          if(@active_sidebar_panel == :outline, do: "right-[380px]", else: "right-0")
+        ]}>
+          <div class="h-32 rounded-tl-xl rounded-bl-xl justify-start items-center inline-flex">
+            <div class={[
+              "px-2 py-6 bg-white dark:bg-black shadow flex-col justify-center gap-4 inline-flex",
+              if(@active_sidebar_panel,
+                do: "rounded-t-xl rounded-b-xl",
+                else: "rounded-tl-xl rounded-bl-xl"
+              )
+            ]}>
+              <OutlineComponent.toggle_outline_button is_active={@active_sidebar_panel == :outline}>
+                <OutlineComponent.outline_icon />
+              </OutlineComponent.toggle_outline_button>
             </div>
-            <.references ctx={@ctx} bib_app_params={@bib_app_params} />
           </div>
         </div>
+
+        <.live_component
+          :if={@active_sidebar_panel == :outline}
+          module={OutlineComponent}
+          id="outline_component"
+          hierarchy={@hierarchy}
+          section_slug={@section.slug}
+          section_id={@section.id}
+          user_id={@current_user.id}
+          page_resource_id={@page_resource_id}
+          selected_view={@selected_view}
+        />
       </div>
     </div>
+    <.page_content_with_sidebar_layout active_sidebar_panel={@active_sidebar_panel}>
+      <:header>
+        <.page_header
+          page_context={@page_context}
+          ctx={@ctx}
+          objectives={@objectives}
+          index={@current_page["index"]}
+          container_label={Utils.get_container_label(@current_page["id"], @section)}
+        />
+      </:header>
 
-    <.scripts scripts={@scripts} user_token={@user_token} />
+      <div id="page_content" class="content" phx-update="ignore" role="page content">
+        <%= raw(@html) %>
+        <div class="flex w-full justify-center">
+          <.reset_attempts_button
+            activity_count={@activity_count}
+            advanced_delivery={@advanced_delivery}
+            page_context={@page_context}
+            section_slug={@section.slug}
+          />
+        </div>
+        <.references ctx={@ctx} bib_app_params={@bib_app_params} />
+      </div>
+    </.page_content_with_sidebar_layout>
     """
   end
 
-  def render(%{view: :graded_page, page_context: %{progress_state: progress_state}} = assigns)
-      when progress_state in [:revised, :in_progress] do
-    # For graded page with attempt in progress the activity scripts and activity_bridge script are needed as soon as the page loads.
+  def render(
+        %{
+          view: :graded_page,
+          page_context: %{effective_settings: %{assessment_mode: :one_at_a_time}}
+        } = assigns
+      ) do
     ~H"""
+    <.countdown {assigns} />
     <div class="flex pb-20 flex-col w-full items-center gap-15 flex-1 overflow-auto">
       <div class="flex flex-col items-center w-full">
         <.scored_page_banner />
-        <%= if !@review_mode and @time_limit > 0 do %>
-          <div
-            id="countdown_timer_display"
-            class="text-xl text-center sticky mt-4 top-2 font-['Open Sans'] tracking-tight text-zinc-700"
-            phx-hook="CountdownTimer"
-            data-timer-id="countdown_timer_display"
-            data-submit-button-id="submit_answers"
-            data-time-out-in-mins={@time_limit}
-            data-start-time-in-ms={@attempt_start_time}
-            data-effective-time-in-ms={@effective_end_time}
-            data-grace-period-in-mins={@grace_period}
-            data-auto-submit={if @auto_submit, do: "true", else: "false"}
-          >
-          </div>
-        <% else %>
-          <%= if !@review_mode and !is_nil(@effective_end_time) do %>
-            <div
-              id="countdown_timer_display"
-              class="text-xl text-center sticky mt-4 top-2 font-['Open Sans'] tracking-tight text-zinc-700"
-              phx-hook="EndDateTimer"
-              data-timer-id="countdown_timer_display"
-              data-submit-button-id="submit_answers"
-              data-effective-time-in-ms={@effective_end_time}
-              data-auto-submit={if @auto_submit, do: "true", else: "false"}
-            >
-            </div>
-          <% end %>
-        <% end %>
-
         <div class="flex-1 w-full max-w-[1040px] px-[80px] pt-20 pb-10 flex-col justify-start items-center gap-10 inline-flex">
           <.page_header
             page_context={@page_context}
@@ -776,15 +897,86 @@ defmodule OliWeb.Delivery.Student.LessonLive do
             index={@current_page["index"]}
             container_label={Utils.get_container_label(@current_page["id"], @section)}
           />
-          <div id="eventIntercept" class="content w-full" phx-update="ignore" role="page content">
+
+          <div :if={@questions != []} class="relative min-h-[500px] justify-center">
+            <.live_component
+              id="one_at_a_time_questions"
+              module={OliWeb.Delivery.Student.Lesson.Components.OneAtATimeQuestion}
+              questions={@questions}
+              attempt_number={@attempt_number}
+              max_attempt_number={@max_attempt_number}
+              datashop_session_id={@datashop_session_id}
+              ctx={@ctx}
+              bib_app_params={@bib_app_params}
+              request_path={@request_path}
+              revision_slug={@revision_slug}
+              attempt_guid={@attempt_guid}
+              section_slug={@section.slug}
+              effective_settings={@page_context.effective_settings}
+            />
+          </div>
+          <div :if={@questions == []} class="flex w-full justify-center">
+            <p>
+              There are no questions available for this page.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <.scripts scripts={@scripts} user_token={@user_token} />
+    """
+  end
+
+  def render(%{view: :graded_page} = assigns) do
+    # For graded page with attempt in progress the activity scripts and activity_bridge script are needed as soon as the page loads.
+    ~H"""
+    <.countdown {assigns} />
+    <div class="flex pb-20 flex-col w-full items-center gap-15 flex-1 overflow-auto">
+      <div class="flex flex-col items-center w-full">
+        <.scored_page_banner />
+        <div class="flex-1 w-full max-w-[1040px] px-[80px] pt-20 pb-10 flex-col justify-start items-center gap-10 inline-flex">
+          <.page_header
+            page_context={@page_context}
+            ctx={@ctx}
+            objectives={@objectives}
+            index={@current_page["index"]}
+            container_label={Utils.get_container_label(@current_page["id"], @section)}
+          />
+
+          <div id="page_content" class="content w-full" phx-update="ignore" role="page content">
             <%= raw(@html) %>
             <div class="flex w-full justify-center">
               <button
                 id="submit_answers"
-                phx-click="finalize_attempt"
+                phx-hook="DelayedSubmit"
                 class="cursor-pointer px-5 py-2.5 hover:bg-opacity-40 bg-blue-600 rounded-[3px] shadow justify-center items-center gap-2.5 inline-flex text-white text-sm font-normal font-['Open Sans'] leading-tight"
               >
-                Submit Answers
+                <span class="button-text">Submit Answers</span>
+                <span class="spinner hidden ml-2 animate-spin">
+                  <svg
+                    class="w-5 h-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    >
+                    </circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    >
+                    </path>
+                  </svg>
+                </span>
               </button>
             </div>
             <.references ctx={@ctx} bib_app_params={@bib_app_params} />
@@ -792,65 +984,87 @@ defmodule OliWeb.Delivery.Student.LessonLive do
         </div>
       </div>
     </div>
-
-    <.scripts scripts={@scripts} user_token={@user_token} />
     """
   end
 
-  def render(
-        %{view: :adaptive_chromeless, page_context: %{progress_state: progress_state}} = assigns
-      )
-      when progress_state in [:revised, :in_progress] do
+  def render(%{view: :adaptive_chromeless} = assigns) do
     ~H"""
-    <!-- ACTIVITIES -->
-    <%= for %{slug: slug, authoring_script: script} <- @activity_types do %>
-      <script
-        :if={slug == "oli_adaptive"}
-        type="text/javascript"
-        src={Routes.static_path(OliWeb.Endpoint, "/js/" <> script)}
-      >
-      </script>
-    <% end %>
-    <!-- PARTS -->
-    <script
-      :for={script <- @part_scripts}
-      type="text/javascript"
-      src={Routes.static_path(OliWeb.Endpoint, "/js/" <> script)}
-    >
-    </script>
+    <div id="eventIntercept" phx-hook="LoadSurveyScripts">
+      <div :if={connected?(@socket) and assigns[:scripts_loaded]}>
+        <script>
+          window.userToken = "<%= @user_token %>";
+        </script>
+        <%= OliWeb.Common.React.component(
+          %{is_liveview: true},
+          "Components.Delivery",
+          @app_params,
+          id: "adaptive_content"
+        ) %>
+      </div>
 
-    <script type="text/javascript" src={Routes.static_path(OliWeb.Endpoint, "/js/delivery.js")}>
-    </script>
-
-    <div id="delivery_container" phx-update="ignore">
-      <%= react_component("Components.Delivery", @app_params) %>
+      <%= OliWeb.LayoutView.additional_stylesheets(%{additional_stylesheets: @additional_stylesheets}) %>
     </div>
+    """
+  end
 
-    <%= OliWeb.LayoutView.additional_stylesheets(%{additional_stylesheets: @additional_stylesheets}) %>
+  def render(assigns) do
+    ~H"""
+    <div></div>
+    """
+  end
 
-    <script>
-      window.userToken = "<%= @user_token %>";
-    </script>
+  def countdown(assigns) do
+    ~H"""
+    <%= if !@review_mode and @time_limit > 0 do %>
+      <div
+        id="countdown_timer_display"
+        phx-update="ignore"
+        class="text-lg text-center absolute mt-4 top-2 right-6 font-['Open Sans'] tracking-tight text-zinc-700"
+        phx-hook="CountdownTimer"
+        data-timer-id="countdown_timer_display"
+        data-submit-button-id="submit_answers"
+        data-time-out-in-mins={@time_limit}
+        data-start-time-in-ms={@attempt_start_time}
+        data-effective-time-in-ms={@effective_end_time}
+        data-grace-period-in-mins={@grace_period}
+        data-auto-submit={if @auto_submit, do: "true", else: "false"}
+      >
+      </div>
+    <% else %>
+      <%= if !@review_mode and !is_nil(@effective_end_time) do %>
+        <div
+          id="countdown_timer_display"
+          phx-update="ignore"
+          class="text-lg text-center absolute mt-4 top-2 right-6 font-['Open Sans'] tracking-tight text-zinc-700"
+          phx-hook="EndDateTimer"
+          data-timer-id="countdown_timer_display"
+          data-submit-button-id="submit_answers"
+          data-effective-time-in-ms={@effective_end_time}
+          data-auto-submit={if @auto_submit, do: "true", else: "false"}
+        >
+        </div>
+      <% end %>
+    <% end %>
     """
   end
 
   attr :show_sidebar, :boolean, default: false
+  attr :active_sidebar_panel, :atom, default: nil
   slot :header, required: true
   slot :inner_block, required: true
-  slot :sidebar, default: nil
-  slot :sidebar_toggle, default: nil
   slot :point_markers, default: nil
 
   defp page_content_with_sidebar_layout(assigns) do
     ~H"""
-    <div class="flex-1 flex flex-col w-full overflow-hidden">
+    <div class="flex-1 flex flex-col w-full">
       <div class={[
         "flex-1 flex flex-col overflow-auto",
-        if(@show_sidebar, do: "xl:mr-[520px]")
+        if(@active_sidebar_panel == :notes, do: "xl:mr-[550px]"),
+        if(@active_sidebar_panel == :outline, do: "xl:mr-[360px]")
       ]}>
         <div class={[
           "flex-1 mt-20 px-[80px] relative",
-          if(@show_sidebar, do: "border-r border-gray-300 xl:mr-[80px]")
+          if(@active_sidebar_panel == :notes, do: "border-r border-gray-300 xl:mr-[80px]")
         ]}>
           <div class="container mx-auto max-w-[880px] pb-20">
             <%= render_slot(@header) %>
@@ -861,15 +1075,6 @@ defmodule OliWeb.Delivery.Student.LessonLive do
           <%= render_slot(@point_markers) %>
         </div>
       </div>
-    </div>
-    <div
-      :if={@sidebar && @show_sidebar}
-      class="flex flex-col w-[520px] absolute top-20 right-0 bottom-0"
-    >
-      <%= render_slot(@sidebar) %>
-    </div>
-    <div :if={@sidebar && !@show_sidebar} class="absolute top-20 right-0">
-      <%= render_slot(@sidebar_toggle) %>
     </div>
     """
   end
@@ -895,18 +1100,21 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     |> assign_html()
   end
 
+  @decorate transaction_event()
   defp assign_scripts(socket) do
     assign(socket,
       scripts: Utils.get_required_activity_scripts(socket.assigns.page_context)
     )
   end
 
+  @decorate transaction_event()
   defp assign_html(socket) do
     assign(socket,
-      html: Utils.build_html(socket.assigns, :delivery)
+      html: Utils.build_html(socket.assigns, :delivery, is_liveview: true)
     )
   end
 
+  @decorate transaction_event()
   defp assign_objectives(socket) do
     %{page_context: %{page: page}, current_user: current_user, section: section} =
       socket.assigns
@@ -941,6 +1149,62 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     )
   end
 
+  defp finalize_attempt(
+         %{
+           assigns: %{
+             section: section,
+             datashop_session_id: datashop_session_id,
+             request_path: request_path,
+             revision_slug: revision_slug,
+             attempt_guid: attempt_guid
+           }
+         } = socket
+       ) do
+    case PageLifecycle.finalize(section.slug, attempt_guid, datashop_session_id) do
+      {:ok,
+       %FinalizationSummary{
+         graded: true,
+         resource_access: %Oli.Delivery.Attempts.Core.ResourceAccess{id: id},
+         effective_settings: effective_settings
+       }} ->
+        # graded resource finalization success
+        section = Sections.get_section_by(slug: section.slug)
+
+        if section.grade_passback_enabled,
+          do: PageLifecycle.GradeUpdateWorker.create(section.id, id, :inline)
+
+        redirect_to =
+          case effective_settings.review_submission do
+            :allow ->
+              Utils.review_live_path(section.slug, revision_slug, attempt_guid,
+                request_path: request_path
+              )
+
+            _ ->
+              Utils.lesson_live_path(section.slug, revision_slug, request_path: request_path)
+          end
+
+        {:noreply, redirect(socket, to: redirect_to)}
+
+      {:ok, %FinalizationSummary{graded: false}} ->
+        {:noreply,
+         redirect(socket,
+           to: Utils.lesson_live_path(section.slug, revision_slug, request_path: request_path)
+         )}
+
+      {:error, {reason}}
+      when reason in [:already_submitted, :active_attempt_present, :no_more_attempts] ->
+        {:noreply, put_flash(socket, :error, "Unable to finalize page")}
+
+      e ->
+        error_msg = Kernel.inspect(e)
+        Logger.error("Page finalization error encountered: #{error_msg}")
+        Oli.Utils.Appsignal.capture_error(error_msg)
+
+        {:noreply, put_flash(socket, :error, "Unable to finalize page")}
+    end
+  end
+
   defp get_post(socket, post_id) do
     Enum.find(socket.assigns.annotations.posts, fn post -> post.id == post_id end)
   end
@@ -966,7 +1230,6 @@ defmodule OliWeb.Delivery.Student.LessonLive do
       %CollabSpaceConfig{status: :enabled, auto_accept: auto_accept} ->
         assign(socket,
           annotations: %{
-            show_sidebar: false,
             point_markers: nil,
             selected_point: nil,
             post_counts: nil,
@@ -1153,79 +1416,6 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     )
   end
 
-  defp emit_page_viewed_event(socket) do
-    section = socket.assigns.section
-    context = socket.assigns.page_context
-
-    page_sub_type =
-      if Map.get(context.page.content, "advancedDelivery", false) do
-        "advanced"
-      else
-        "basic"
-      end
-
-    {project_id, publication_id} = get_project_and_publication_ids(section.id, context.page.id)
-
-    emit_page_viewed_helper(
-      %Oli.Analytics.XAPI.Events.Context{
-        user_id: socket.assigns.current_user.id,
-        host_name: host_name(),
-        section_id: section.id,
-        project_id: project_id,
-        publication_id: publication_id
-      },
-      %{
-        attempt_guid: List.first(context.resource_attempts).attempt_guid,
-        attempt_number: List.first(context.resource_attempts).attempt_number,
-        resource_id: context.page.resource_id,
-        timestamp: DateTime.utc_now(),
-        page_sub_type: page_sub_type
-      }
-    )
-
-    socket
-  end
-
-  defp emit_page_viewed_helper(
-         %Oli.Analytics.XAPI.Events.Context{} = context,
-         %{
-           attempt_guid: _page_attempt_guid,
-           attempt_number: _page_attempt_number,
-           resource_id: _page_id,
-           timestamp: _timestamp,
-           page_sub_type: _page_sub_type
-         } = page_details
-       ) do
-    event = Oli.Analytics.XAPI.Events.Attempt.PageViewed.new(context, page_details)
-    Oli.Analytics.XAPI.emit(:page_viewed, event)
-  end
-
-  defp get_project_and_publication_ids(section_id, revision_id) do
-    # From the SectionProjectPublication table, get the project_id and publication_id
-    # where a published resource exists for revision_id
-    # and the section_id matches the section_id
-
-    query =
-      from sp in Oli.Delivery.Sections.SectionsProjectsPublications,
-        join: pr in Oli.Publishing.PublishedResource,
-        on: pr.publication_id == sp.publication_id,
-        where: sp.section_id == ^section_id and pr.revision_id == ^revision_id,
-        select: {sp.project_id, sp.publication_id}
-
-    # Return nil if somehow we cannot resolve this resource.  This is just a guaranteed that
-    # we can never throw an error here
-    case Oli.Repo.all(query) do
-      [] -> {nil, nil}
-      other -> hd(other)
-    end
-  end
-
-  defp host_name() do
-    Application.get_env(:oli, OliWeb.Endpoint)
-    |> Keyword.get(:url)
-    |> Keyword.get(:host)
-  end
-
   defp slim_assigns(socket) do
     Enum.reduce(@required_keys_per_assign, socket, fn {assign_name, {required_keys, struct}},
                                                       socket ->
@@ -1240,11 +1430,117 @@ defmodule OliWeb.Delivery.Student.LessonLive do
     end)
   end
 
+  _docp = """
+  In case the page is configured to show one question at a time,
+  we pre-process the html content to assign all the questions to the socket.
+  """
+
+  defp maybe_assign_questions(socket, :traditional), do: socket
+
+  defp maybe_assign_questions(socket, :one_at_a_time) do
+    activity_part_points_mapper =
+      build_activity_part_points_mapper(socket.assigns.page_context.activities)
+
+    questions =
+      socket.assigns.html
+      |> List.flatten()
+      |> Enum.reduce({1, []}, fn element, {index, activities} ->
+        if String.contains?(element, "activity-container") do
+          state =
+            element
+            |> Floki.parse_fragment!()
+            |> Floki.attribute("state")
+            |> hd()
+            |> Jason.decode!()
+
+          context =
+            element
+            |> Floki.parse_fragment!()
+            |> Floki.attribute("context")
+            |> hd()
+            |> Jason.decode!()
+
+          {index + 1,
+           [
+             %{
+               number: index,
+               raw_content: element,
+               selected: index == 1,
+               state: state,
+               context: context,
+               answered: !Enum.any?(state["parts"], fn part -> part["response"] in ["", nil] end),
+               submitted:
+                 !Enum.any?(state["parts"], fn part -> part["dateSubmitted"] in ["", nil] end),
+               part_points: activity_part_points_mapper[state["activityId"]]
+             }
+             | activities
+           ]}
+        else
+          {index, activities}
+        end
+      end)
+      |> elem(1)
+      |> Enum.reverse()
+
+    assign(socket,
+      questions: questions,
+      attempt_number: attempt_number(socket.assigns.page_context),
+      max_attempt_number: max_attempt_number(socket.assigns.page_context)
+    )
+  end
+
+  defp max_attempt_number(%{effective_settings: %{max_attempts: 0}} = _page_context),
+    do: "unlimited"
+
+  defp max_attempt_number(%{effective_settings: %{max_attempts: max_attempts}} = _page_context),
+    do: max_attempts
+
+  defp attempt_number(%{resource_attempts: resource_attempts} = _page_context),
+    do: hd(resource_attempts).attempt_number
+
+  defp build_activity_part_points_mapper(activities) do
+    # activity_id => %{"part_id" => total_part_points}
+    # %{
+    #   12742 => %{"1" => 1},
+    #   12745 => %{"1" => 1},
+    #   12746 => %{"1" => 1, "3660145108" => 1}
+    # }
+
+    Enum.reduce(activities, %{}, fn {activity_id, activity_summary}, act_acum ->
+      part_scores =
+        activity_summary.unencoded_model["authoring"]["parts"]
+        |> Enum.reduce(%{}, fn part, part_acum ->
+          Map.merge(part_acum, %{
+            part["id"] =>
+              Enum.reduce(part["responses"], 0, fn response, acum_score ->
+                acum_score + response["score"]
+              end)
+          })
+        end)
+
+      Map.merge(act_acum, %{activity_id => part_scores})
+    end)
+  end
+
   defp to_epoch(nil), do: nil
 
   defp to_epoch(date_time) do
     date_time
     |> DateTime.to_unix(:second)
     |> Kernel.*(1000)
+  end
+
+  defp get_selected_view(params) do
+    case params["selected_view"] do
+      nil -> @default_selected_view
+      view when view not in ~w(gallery outline) -> @default_selected_view
+      view -> String.to_existing_atom(view)
+    end
+  end
+
+  defp get_or_compute_full_hierarchy(section) do
+    SectionCache.get_or_compute(section.slug, :full_hierarchy, fn ->
+      Hierarchy.full_hierarchy(section)
+    end)
   end
 end

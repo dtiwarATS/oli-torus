@@ -19,8 +19,8 @@ defmodule OliWeb.CollaborationLiveTest do
     do:
       Routes.page_delivery_path(OliWeb.Endpoint, :page_preview, section_slug, page_revision_slug)
 
-  defp live_view_collab_space_index(type, section_slug \\ []),
-    do: Routes.collab_spaces_index_path(OliWeb.Endpoint, type, section_slug)
+  defp live_view_collab_space_index(section_slug),
+    do: ~p"/sections/#{section_slug}/collaborative_spaces"
 
   defp live_view_student_page(section_slug, page_revision_slug),
     do: Routes.page_delivery_path(OliWeb.Endpoint, :page, section_slug, page_revision_slug)
@@ -166,10 +166,15 @@ defmodule OliWeb.CollaborationLiveTest do
       project: project,
       page_revision: page_revision
     } do
-      assert conn
-             |> get(live_view_author_edit(project.slug, page_revision.slug))
-             |> html_response(302) =~
-               "You are being <a href=\"/authoring/session/new?request_path=%2Fauthoring%2Fproject%2F#{project.slug}%2Fresource%2F#{page_revision.slug}\">redirected</a>"
+      conn =
+        conn
+        |> get(live_view_author_edit(project.slug, page_revision.slug))
+
+      assert html_response(conn, 302) =~
+               "You are being <a href=\"/authors/log_in\">redirected</a>"
+
+      assert Plug.Conn.get_session(conn, :author_return_to) ==
+               "/authoring/project/#{project.slug}/resource/#{page_revision.slug}"
     end
 
     test "returns forbidden when accessing the instructor preview page view", %{
@@ -182,23 +187,19 @@ defmodule OliWeb.CollaborationLiveTest do
              |> html_response(403)
     end
 
-    test "redirects to new session when accessing the admin index view", %{
-      conn: conn
-    } do
-      assert conn
-             |> get(live_view_collab_space_index(:admin))
-             |> html_response(302) =~
-               "You are being <a href=\"/authoring/session/new?request_path=%2Fadmin%2Fcollaborative_spaces\">redirected</a>"
-    end
-
     test "redirects to new session when accessing the instructor index view", %{
       conn: conn,
       section: section
     } do
-      assert conn
-             |> get(live_view_collab_space_index(:instructor, section.slug))
-             |> html_response(302) =~
-               "You are being <a href=\"/session/new?request_path=%2Fsections%2F#{section.slug}%2Fcollaborative_spaces&amp;section=#{section.slug}\">redirected"
+      conn =
+        conn
+        |> get(live_view_collab_space_index(section.slug))
+
+      assert html_response(conn, 302) =~
+               "You are being <a href=\"/users/log_in\">redirected</a>"
+
+      assert Plug.Conn.get_session(conn, :user_return_to) ==
+               "/sections/#{section.slug}/collaborative_spaces"
     end
 
     test "redirects to new session when accessing the student collab space page view", %{
@@ -206,10 +207,15 @@ defmodule OliWeb.CollaborationLiveTest do
       section: section,
       page_revision: page_revision
     } do
-      assert conn
-             |> get(live_view_student_page(section.slug, page_revision.slug))
-             |> html_response(302) =~
-               "You are being <a href=\"/?request_path=%2Fsections%2F#{section.slug}%2Fpage%2F#{page_revision.slug}&amp;section=#{section.slug}\">redirected"
+      conn =
+        conn
+        |> get(live_view_student_page(section.slug, page_revision.slug))
+
+      assert html_response(conn, 302) =~
+               "You are being <a href=\"/users/log_in\">redirected</a>"
+
+      assert Plug.Conn.get_session(conn, :user_return_to) ==
+               "/sections/#{section.slug}/page/#{page_revision.slug}"
     end
   end
 
@@ -221,10 +227,15 @@ defmodule OliWeb.CollaborationLiveTest do
       project: project,
       page_revision: page_revision
     } do
-      assert conn
-             |> get(live_view_author_edit(project.slug, page_revision.slug))
-             |> html_response(302) =~
-               "You are being <a href=\"/authoring/session/new?request_path=%2Fauthoring%2Fproject%2F#{project.slug}%2Fresource%2F#{page_revision.slug}\">redirected</a>"
+      conn =
+        conn
+        |> get(live_view_author_edit(project.slug, page_revision.slug))
+
+      assert html_response(conn, 302) =~
+               "You are being <a href=\"/authors/log_in\">redirected</a>"
+
+      assert Plug.Conn.get_session(conn, :author_return_to) ==
+               "/authoring/project/#{project.slug}/resource/#{page_revision.slug}"
     end
 
     test "redirects to page when accessing the instructor preview page view", %{
@@ -241,15 +252,6 @@ defmodule OliWeb.CollaborationLiveTest do
                "You are being <a href=\"/sections/#{section.slug}/page/#{page_revision.slug}"
     end
 
-    test "redirects to new session when accessing the admin index view", %{
-      conn: conn
-    } do
-      assert conn
-             |> get(live_view_collab_space_index(:admin))
-             |> html_response(302) =~
-               "You are being <a href=\"/authoring/session/new?request_path=%2Fadmin%2Fcollaborative_spaces\">redirected</a>"
-    end
-
     test "redirects to unauthorized when accessing the instructor index view", %{
       conn: conn,
       section: section,
@@ -258,7 +260,7 @@ defmodule OliWeb.CollaborationLiveTest do
       enroll_user_to_section(user, section, :context_learner)
 
       assert conn
-             |> get(live_view_collab_space_index(:instructor, section.slug))
+             |> get(live_view_collab_space_index(section.slug))
              |> html_response(302) =~
                "You are being <a href=\"/unauthorized\">redirected"
     end
@@ -276,30 +278,6 @@ defmodule OliWeb.CollaborationLiveTest do
     end
   end
 
-  describe "user cannot access when is logged in as an author but is not a system admin or author of the project" do
-    setup [:author_conn, :create_project_and_section]
-
-    test "redirects to projects when accessing the admin index view", %{
-      conn: conn
-    } do
-      assert conn
-             |> get(live_view_collab_space_index(:admin))
-             |> response(403) =~
-               "Forbidden"
-    end
-
-    test "redirects to projects when accessing the author edit page view", %{
-      conn: conn,
-      project: project,
-      page_revision: page_revision
-    } do
-      assert conn
-             |> get(live_view_author_edit(project.slug, page_revision.slug))
-             |> html_response(302) =~
-               "You are being <a href=\"/authoring/projects\">redirected</a>"
-    end
-  end
-
   describe "user can access when is logged in as an author, is not a system admin but is author of the project" do
     setup [:create_project_and_section]
 
@@ -311,7 +289,7 @@ defmodule OliWeb.CollaborationLiveTest do
     } do
       conn =
         conn
-        |> Pow.Plug.assign_current_user(author, OliWeb.Pow.PowHelpers.get_pow_config(:author))
+        |> log_in_author(author)
         |> get(live_view_author_edit(project.slug, page_revision.slug))
 
       assert html_response(conn, 200) =~
@@ -698,114 +676,6 @@ defmodule OliWeb.CollaborationLiveTest do
     end
   end
 
-  describe "admin - index view" do
-    setup [:admin_conn, :create_project_and_section]
-
-    test "loads correctly", %{
-      conn: conn,
-      page_revision: page_revision,
-      page_revision_cs: page_revision_cs,
-      project: project
-    } do
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:admin))
-
-      assert has_element?(view, "#collaborative-spaces-table")
-      assert has_element?(view, "td", "#{project.title}")
-      assert has_element?(view, "td", "#{page_revision_cs.title}")
-      assert has_element?(view, "td", "2")
-      assert has_element?(view, "td", "#{page_revision.title}")
-    end
-
-    test "applies searching", %{
-      conn: conn,
-      page_revision: page_revision,
-      page_revision_cs: page_revision_cs
-    } do
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:admin))
-
-      view
-      |> element("input[phx-blur=\"change_search\"]")
-      |> render_blur(%{value: "other revision A"})
-
-      view
-      |> element("button[phx-click=\"apply_search\"]")
-      |> render_click()
-
-      refute has_element?(view, "td", "#{page_revision_cs.title}")
-      assert has_element?(view, "td", "#{page_revision.title}")
-
-      view
-      |> element("button[phx-click=\"reset_search\"]")
-      |> render_click()
-
-      assert has_element?(view, "td", "#{page_revision_cs.title}")
-      assert has_element?(view, "td", "#{page_revision.title}")
-    end
-
-    test "applies sorting", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:admin))
-
-      view
-      |> element("th[phx-click=\"sort\"]:first-of-type")
-      |> render_click(%{sort_by: "page_title"})
-
-      assert view
-             |> element("tr:first-child > td:nth-child(2)")
-             |> render() =~
-               "Other revision A"
-
-      view
-      |> element("th[phx-click=\"sort\"]:first-of-type")
-      |> render_click(%{sort_by: "page_title"})
-
-      assert view
-             |> element("tr:first-child > td:nth-child(2)")
-             |> render() =~
-               "Other revision B"
-    end
-
-    test "applies paging", %{
-      conn: conn,
-      project: project,
-      publication: publication,
-      author: author
-    } do
-      for i <- 0..20 do
-        create_for_paging(project.id, publication, author, "Page #{i}")
-      end
-
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:admin))
-
-      view
-      |> element("th[phx-click=sort][phx-value-sort_by=page_title]")
-      |> render_click()
-
-      assert view
-             |> element("tr:first-child > td:nth-child(2)")
-             |> render() =~
-               "Other revision A"
-
-      assert view
-             |> element("tr:nth-child(2) > td:nth-child(2)")
-             |> render() =~
-               "Other revision B"
-    end
-
-    test "renders datetimes using the local timezone", context = %{second_post: second_post} do
-      {:ok, conn: conn, ctx: session_context} = set_timezone(context)
-
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:admin))
-
-      assert has_element?(
-               view,
-               "tr",
-               OliWeb.Common.Utils.render_date(second_post, :inserted_at, session_context)
-             )
-    end
-  end
-
   describe "instructor - index view" do
     setup [:user_conn, :create_project_and_section]
 
@@ -818,7 +688,7 @@ defmodule OliWeb.CollaborationLiveTest do
     } do
       enroll_user_to_section(user, section, :context_instructor)
 
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:instructor, section.slug))
+      {:ok, view, _html} = live(conn, live_view_collab_space_index(section.slug))
 
       assert has_element?(view, "#collaborative-spaces-table")
       assert has_element?(view, "td", "#{page_revision_cs.title}")
@@ -834,7 +704,7 @@ defmodule OliWeb.CollaborationLiveTest do
       user: user
     } do
       enroll_user_to_section(user, section, :context_instructor)
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:instructor, section.slug))
+      {:ok, view, _html} = live(conn, live_view_collab_space_index(section.slug))
 
       view
       |> element("input[phx-blur=\"change_search\"]")
@@ -861,7 +731,7 @@ defmodule OliWeb.CollaborationLiveTest do
       user: user
     } do
       enroll_user_to_section(user, section, :context_instructor)
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:instructor, section.slug))
+      {:ok, view, _html} = live(conn, live_view_collab_space_index(section.slug))
 
       view
       |> element("th[phx-click=sort][phx-value-sort_by=page_title]")
@@ -899,7 +769,7 @@ defmodule OliWeb.CollaborationLiveTest do
       {:ok, _sr} = Sections.create_section_resources(section, publication)
       enroll_user_to_section(user, section, :context_instructor)
 
-      {:ok, view, _html} = live(conn, live_view_collab_space_index(:instructor, section.slug))
+      {:ok, view, _html} = live(conn, live_view_collab_space_index(section.slug))
 
       view
       |> element("th[phx-click=sort][phx-value-sort_by=page_title]")

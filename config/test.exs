@@ -1,7 +1,11 @@
 import Config
 
+# Only in tests, remove the complexity from the password hashing algorithm
+config :bcrypt_elixir, :log_rounds, 1
+
 config :oli,
   env: :test,
+  depot_coordinator: Oli.Delivery.SingletonDepotCoordinator,
   s3_media_bucket_name: System.get_env("TEST_S3_MEDIA_BUCKET_NAME"),
   s3_xapi_bucket_name: System.get_env("S3_XAPI_BUCKET_NAME"),
   media_url: System.get_env("TEST_MEDIA_URL"),
@@ -10,6 +14,7 @@ config :oli,
   openai_client: Oli.Test.MockOpenAIClient,
   date_time_module: Oli.Test.DateTimeMock,
   date_module: Oli.Test.DateMock,
+  recaptcha_module: Oli.Test.RecaptchaMock,
   slack_webhook_url: nil,
   branding: [
     name: "OLI Torus Test",
@@ -54,9 +59,7 @@ config :oli, :recaptcha,
 config :oli, :help, dispatcher: Oli.Help.Providers.EmailHelp
 
 # Configure Email
-config :oli, Oli.Mailer, adapter: Bamboo.TestAdapter
-
-config :oli, OliWeb.Pow.Mailer, adapter: Bamboo.TestAdapter
+config :oli, Oli.Mailer, adapter: Swoosh.Adapters.Test
 
 # speed up tests by lowering the hash iterations
 config :bcrypt_elixir, log_rounds: 4
@@ -74,10 +77,27 @@ config :lti_1p3,
   ],
   ags_line_item_prefix: "oli-torus-"
 
+# Configurable http/https protocol options for cowboy
+# https://ninenines.eu/docs/en/cowboy/2.5/manual/cowboy_http/
+http_max_header_name_length =
+  System.get_env("HTTP_MAX_HEADER_NAME_LENGTH", "64") |> String.to_integer()
+
+http_max_header_value_length =
+  System.get_env("HTTP_MAX_HEADER_VALUE_LENGTH", "4096") |> String.to_integer()
+
+http_max_headers = System.get_env("HTTP_MAX_HEADERS", "100") |> String.to_integer()
+
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :oli, OliWeb.Endpoint,
-  http: [port: 4002],
+  http: [
+    port: 4002,
+    protocol_options: [
+      max_header_name_length: http_max_header_name_length,
+      max_header_value_length: http_max_header_value_length,
+      max_headers: http_max_headers
+    ]
+  ],
   server: false,
   url: [scheme: "https"]
 
@@ -102,14 +122,5 @@ truncate =
 config :logger, truncate: truncate
 
 config :appsignal, :config, active: false
-
-config :oli, :auth_providers,
-  google_client_id: System.get_env("GOOGLE_CLIENT_ID", "client_id"),
-  google_client_secret: System.get_env("GOOGLE_CLIENT_SECRET", "client_secret"),
-  author_github_client_id: System.get_env("AUTHOR_GITHUB_CLIENT_ID", "author_client_id"),
-  author_github_client_secret:
-    System.get_env("AUTHOR_GITHUB_CLIENT_SECRET", "author_client_secret"),
-  user_github_client_id: System.get_env("USER_GITHUB_CLIENT_ID", "user_client_id"),
-  user_github_client_secret: System.get_env("USER_GITHUB_CLIENT_SECRET", "user_client_secret")
 
 config :oli, :section_cache, dispatcher: Oli.TestHelpers.CustomDispatcher

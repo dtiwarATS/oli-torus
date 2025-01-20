@@ -2,10 +2,11 @@ defmodule Oli.TestHelpers do
   import Ecto.Query, warn: false
   import Mox
   import Oli.Factory
+  import Oli.Utils.Seeder.AccountsFixtures
 
   alias Oli.Repo
   alias Oli.Accounts
-  alias Oli.Accounts.{Author, AuthorPreferences, User}
+  alias Oli.Accounts.{AuthorPreferences}
   alias Oli.Activities
   alias Oli.Analytics.Summary
   alias Oli.Authoring.Course
@@ -16,7 +17,7 @@ defmodule Oli.TestHelpers do
   alias Oli.Institutions
   alias Oli.PartComponents
   alias Oli.Publishing
-  alias OliWeb.Common.{LtiSession, SessionContext}
+  alias OliWeb.Common.SessionContext
   alias Lti_1p3.Tool.ContextRoles
   alias Oli.Delivery.Gating.GatingConditionData
   alias Oli.Resources.ResourceType
@@ -29,6 +30,7 @@ defmodule Oli.TestHelpers do
   Mox.defmock(Oli.Test.MockOpenAIClient, for: Oli.OpenAIClient)
   Mox.defmock(Oli.Test.DateTimeMock, for: Oli.DateTime)
   Mox.defmock(Oli.Test.DateMock, for: Oli.Date)
+  Mox.defmock(Oli.Test.RecaptchaMock, for: Oli.Recaptcha)
 
   defmodule CustomDispatcher do
     @moduledoc """
@@ -66,9 +68,12 @@ defmodule Oli.TestHelpers do
     Mox.stub(Oli.Test.DateMock, :utc_today, fn -> DateTime.to_date(utc_now) end)
   end
 
-  def yesterday() do
-    {:ok, datetime} = DateTime.now("Etc/UTC")
-    DateTime.add(datetime, -(60 * 60 * 24), :second)
+  def stub_recaptcha() do
+    Mox.stub(Oli.Test.RecaptchaMock, :verify, fn _ -> {:success, true} end)
+  end
+
+  def yesterday(now \\ DateTime.now!("Etc/UTC")) do
+    DateTime.add(now, -(60 * 60 * 24), :second)
   end
 
   def tomorrow() do
@@ -96,58 +101,6 @@ defmodule Oli.TestHelpers do
       |> Repo.insert()
 
     section
-  end
-
-  def user_fixture(attrs \\ %{}) do
-    params =
-      attrs
-      |> Enum.into(%{
-        sub: UUID.uuid4(),
-        name: "Ms Jane Marie Doe",
-        given_name: "Jane",
-        family_name: "Doe",
-        middle_name: "Marie",
-        picture: "https://platform.example.edu/jane.jpg",
-        email: "jane#{System.unique_integer([:positive])}@platform.example.edu",
-        locale: "en-US"
-      })
-
-    {:ok, user} =
-      case attrs do
-        %{password: _password, password_confirmation: _password_confirmation} ->
-          User.changeset(%User{}, params)
-          |> Repo.insert()
-
-        _ ->
-          User.noauth_changeset(%User{}, params)
-          |> Repo.insert()
-      end
-
-    user
-  end
-
-  def author_fixture(attrs \\ %{}) do
-    params =
-      attrs
-      |> Enum.into(%{
-        email: "author#{System.unique_integer([:positive])}@example.edu",
-        given_name: "Test",
-        family_name: "Author",
-        system_role_id: Accounts.SystemRole.role_id().author
-      })
-
-    {:ok, author} =
-      case attrs do
-        %{password: _password, password_confirmation: _password_confirmation} ->
-          Author.changeset(%Author{}, params)
-          |> Repo.insert()
-
-        _ ->
-          Author.noauth_changeset(%Author{}, params)
-          |> Repo.insert()
-      end
-
-    author
   end
 
   def institution_fixture(attrs \\ %{}) do
@@ -290,33 +243,95 @@ defmodule Oli.TestHelpers do
     |> Repo.insert()
   end
 
+  @doc """
+  Setup helper that registers and logs in users.
+
+      setup :register_and_log_in_user
+
+  It stores an updated connection and a registered user in the
+  test context.
+  """
+  def register_and_log_in_user(%{conn: conn}, attrs \\ %{}) do
+    user = Oli.Utils.Seeder.AccountsFixtures.user_fixture(attrs)
+    %{conn: log_in_user(conn, user), user: user}
+  end
+
+  @doc """
+  Logs the given `user` into the `conn`.
+
+  It returns an updated `conn`.
+  """
+  def log_in_user(conn, user) do
+    token = Oli.Accounts.generate_user_session_token(user)
+
+    conn
+    |> Phoenix.ConnTest.init_test_session(%{})
+    |> Plug.Conn.put_session(:user_token, token)
+    |> Plug.Conn.put_session(:current_user_id, user.id)
+  end
+
+  def log_out_user(conn) do
+    conn
+    |> Phoenix.ConnTest.init_test_session(%{})
+    |> Plug.Conn.delete_session(:user_token)
+    |> Plug.Conn.delete_session(:current_user_id)
+  end
+
+  @doc """
+  Setup helper that registers and logs in authors.
+
+      setup :register_and_log_in_author
+
+  It stores an updated connection and a registered author in the
+  test context.
+  """
+  def register_and_log_in_author(%{conn: conn}, attrs \\ %{}) do
+    author = Oli.Utils.Seeder.AccountsFixtures.author_fixture(attrs)
+    %{conn: log_in_author(conn, author), author: author}
+  end
+
+  @doc """
+  Logs the given `author` into the `conn`.
+
+  It returns an updated `conn`.
+  """
+  def log_in_author(conn, author) do
+    token = Oli.Accounts.generate_author_session_token(author)
+
+    conn
+    |> Phoenix.ConnTest.init_test_session(%{})
+    |> Plug.Conn.put_session(:author_token, token)
+    |> Plug.Conn.put_session(:current_author_id, author.id)
+  end
+
   def independent_instructor_conn(context), do: user_conn(context, %{can_create_sections: true})
 
   def user_conn(%{conn: conn}, attrs \\ %{}) do
     user = user_fixture(attrs)
-    conn = Pow.Plug.assign_current_user(conn, user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+    conn = log_in_user(conn, user)
 
     {:ok, conn: conn, user: user}
   end
 
   def guest_conn(%{conn: conn}) do
     guest = user_fixture(%{guest: true})
-    conn = Pow.Plug.assign_current_user(conn, guest, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+    conn = log_in_user(conn, guest)
 
     {:ok, conn: conn, guest: guest}
   end
 
   def instructor_conn(%{conn: conn}) do
+    instructor = user_fixture(%{can_create_sections: true})
+
     {:ok, instructor} =
       Accounts.update_user_platform_roles(
-        insert(:user, %{can_create_sections: true, independent_learner: true}),
+        instructor,
         [Lti_1p3.Tool.PlatformRoles.get_role(:institution_instructor)]
       )
 
     conn =
       conn
-      |> Plug.Test.init_test_session(lti_session: nil)
-      |> Pow.Plug.assign_current_user(instructor, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+      |> log_in_user(instructor)
 
     {:ok, conn: conn, instructor: instructor}
   end
@@ -326,34 +341,29 @@ defmodule Oli.TestHelpers do
     tool_jwk = jwk_fixture()
     registration = insert(:lti_registration, %{tool_jwk_id: tool_jwk.id})
     deployment = insert(:lti_deployment, %{institution: institution, registration: registration})
-    instructor = insert(:user)
+    instructor = user_fixture(%{can_create_sections: true})
 
-    lti_param_ids = %{
-      instructor:
-        cache_lti_params(
-          %{
-            "iss" => registration.issuer,
-            "aud" => registration.client_id,
-            "sub" => instructor.sub,
-            "exp" => Timex.now() |> Timex.add(Timex.Duration.from_hours(1)) |> Timex.to_unix(),
-            "https://purl.imsglobal.org/spec/lti/claim/context" => %{
-              "id" => "some_id",
-              "title" => "some_title"
-            },
-            "https://purl.imsglobal.org/spec/lti/claim/roles" => [
-              "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
-            ],
-            "https://purl.imsglobal.org/spec/lti/claim/deployment_id" => deployment.deployment_id
-          },
-          instructor.id
-        )
-    }
+    cache_lti_params(
+      %{
+        "iss" => registration.issuer,
+        "aud" => registration.client_id,
+        "sub" => instructor.sub,
+        "exp" => Timex.now() |> Timex.add(Timex.Duration.from_hours(1)) |> Timex.to_unix(),
+        "https://purl.imsglobal.org/spec/lti/claim/context" => %{
+          "id" => "some_id",
+          "title" => "some_title"
+        },
+        "https://purl.imsglobal.org/spec/lti/claim/roles" => [
+          "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+        ],
+        "https://purl.imsglobal.org/spec/lti/claim/deployment_id" => deployment.deployment_id
+      },
+      instructor.id
+    )
 
     conn =
       conn
-      |> Plug.Test.init_test_session(lti_session: nil)
-      |> Pow.Plug.assign_current_user(instructor, OliWeb.Pow.PowHelpers.get_pow_config(:user))
-      |> LtiSession.put_session_lti_params(lti_param_ids.instructor)
+      |> log_in_user(instructor)
 
     {:ok, conn: conn, instructor: instructor}
   end
@@ -362,7 +372,7 @@ defmodule Oli.TestHelpers do
     author = author_fixture()
 
     conn =
-      Pow.Plug.assign_current_user(conn, author, OliWeb.Pow.PowHelpers.get_pow_config(:author))
+      log_in_author(conn, author)
 
     {:ok, conn: conn, author: author}
   end
@@ -372,7 +382,7 @@ defmodule Oli.TestHelpers do
     [project | _rest] = make_n_projects(1, author)
 
     conn =
-      Pow.Plug.assign_current_user(conn, author, OliWeb.Pow.PowHelpers.get_pow_config(:author))
+      log_in_author(conn, author)
 
     {:ok, conn: conn, author: author, project: project}
   end
@@ -385,7 +395,7 @@ defmodule Oli.TestHelpers do
       })
 
     conn =
-      Pow.Plug.assign_current_user(conn, admin, OliWeb.Pow.PowHelpers.get_pow_config(:author))
+      log_in_author(conn, admin)
 
     {:ok, conn: conn, admin: admin}
   end
@@ -398,10 +408,9 @@ defmodule Oli.TestHelpers do
       })
 
     conn =
-      Pow.Plug.assign_current_user(
+      log_in_author(
         conn,
-        account_admin,
-        OliWeb.Pow.PowHelpers.get_pow_config(:author)
+        account_admin
       )
 
     {:ok, conn: conn, account_admin: account_admin}
@@ -415,10 +424,9 @@ defmodule Oli.TestHelpers do
       })
 
     conn =
-      Pow.Plug.assign_current_user(
+      log_in_author(
         conn,
-        content_admin,
-        OliWeb.Pow.PowHelpers.get_pow_config(:author)
+        content_admin
       )
 
     {:ok, conn: conn, content_admin: content_admin}
@@ -426,12 +434,12 @@ defmodule Oli.TestHelpers do
 
   def recycle_author_session(conn, author) do
     Phoenix.ConnTest.recycle(conn)
-    |> Pow.Plug.assign_current_user(author, OliWeb.Pow.PowHelpers.get_pow_config(:author))
+    |> log_in_author(author)
   end
 
   def recycle_user_session(conn, user) do
     Phoenix.ConnTest.recycle(conn)
-    |> Pow.Plug.assign_current_user(user, OliWeb.Pow.PowHelpers.get_pow_config(:user))
+    |> log_in_user(user)
   end
 
   def author_project_fixture(), do: author_project_fixture(nil)
@@ -449,7 +457,7 @@ defmodule Oli.TestHelpers do
     objective_revision = objective.objective_revision
 
     conn =
-      Pow.Plug.assign_current_user(conn, author, OliWeb.Pow.PowHelpers.get_pow_config(:author))
+      log_in_author(conn, author)
 
     {:ok, conn: conn, author: author, project: project, objective_revision: objective_revision}
   end
@@ -859,6 +867,80 @@ defmodule Oli.TestHelpers do
      unit_one_revision: unit_one_revision,
      page_revision: page_revision,
      page_2_revision: page_2_revision}
+  end
+
+  def create_project_with_n_scored_pages(_conn, n) do
+    author = insert(:author)
+    project = insert(:project, authors: [author])
+
+    pages =
+      Enum.map(1..n, fn i ->
+        insert(:revision,
+          resource_type_id: Oli.Resources.ResourceType.id_for_page(),
+          title: "Page_#{i}",
+          graded: true,
+          content: %{"advancedDelivery" => true}
+        )
+      end)
+
+    # Associate page to the project
+    Enum.map(pages, fn page ->
+      insert(:project_resource, %{
+        project_id: project.id,
+        resource_id: page.resource.id
+      })
+    end)
+
+    # root container
+    container_resource = insert(:resource)
+
+    # Associate root container to the project
+    insert(:project_resource, %{project_id: project.id, resource_id: container_resource.id})
+
+    container_revision =
+      insert(:revision, %{
+        resource: container_resource,
+        objectives: %{},
+        resource_type_id: Oli.Resources.ResourceType.id_for_container(),
+        children: Enum.map(pages, & &1.resource.id),
+        content: %{},
+        deleted: false,
+        title: "Root Container"
+      })
+
+    # Publication of project with root container
+    publication =
+      insert(:publication, %{project: project, root_resource_id: container_resource.id})
+
+    # Publish root container resource
+    insert(:published_resource, %{
+      publication: publication,
+      resource: container_resource,
+      revision: container_revision,
+      author: author
+    })
+
+    Enum.map(pages, fn page ->
+      insert(:published_resource, %{
+        publication: publication,
+        resource: page.resource,
+        revision: page,
+        author: author
+      })
+    end)
+
+    section =
+      insert(:section,
+        base_project: project,
+        context_id: UUID.uuid4(),
+        open_and_free: true,
+        registration_open: true,
+        type: :enrollable
+      )
+
+    {:ok, section} = Sections.create_section_resources(section, publication)
+
+    %{section: section, project: project, pages: pages}
   end
 
   def create_project_with_products(_conn) do
@@ -1390,7 +1472,8 @@ defmodule Oli.TestHelpers do
     publication =
       insert(:publication, %{
         project: project,
-        root_resource_id: root_resource.id
+        root_resource_id: root_resource.id,
+        published: nil
       })
 
     # Publish all resources
@@ -1453,7 +1536,11 @@ defmodule Oli.TestHelpers do
         module_resource_1: module_resource_1,
         module_resource_2: module_resource_2,
         unit_resource: unit_resource,
-        root_resource: root_resource
+        root_resource: root_resource,
+        act_revision_w: act_revision_w,
+        act_resource_x: act_resource_x,
+        act_resource_y: act_resource_y,
+        act_resource_z: act_resource_z
       },
       revisions: %{
         obj_revision_a: obj_revision_a,
@@ -1469,7 +1556,11 @@ defmodule Oli.TestHelpers do
         module_revision_1: module_revision_1,
         module_revision_2: module_revision_2,
         unit_revision: unit_revision,
-        root_revision: root_revision
+        root_revision: root_revision,
+        act_revision_w: act_revision_w,
+        act_revision_x: act_revision_x,
+        act_revision_y: act_revision_y,
+        act_revision_z: act_revision_z
       }
     }
   end
@@ -2021,20 +2112,6 @@ defmodule Oli.TestHelpers do
       activity_attempt: activity_attempt_2,
       response: %{files: [], input: "option_2_id"}
     )
-
-    insert(:snapshot, %{
-      section: section_1,
-      resource: page_1_revision.resource,
-      user: user_1,
-      correct: true
-    })
-
-    insert(:snapshot, %{
-      section: section_2,
-      resource: page_1_revision.resource,
-      user: user_2,
-      correct: true
-    })
 
     {:ok, section_1} = Sections.create_section_resources(section_1, publication)
     {:ok, section_2} = Sections.create_section_resources(section_2, publication)
@@ -3659,5 +3736,334 @@ defmodule Oli.TestHelpers do
     }
     """
     |> Jason.decode!()
+  end
+
+  def likert_activity_content(title \\ "Some Title") do
+    %{
+      "stem" => %{
+        "id" => "2045374543",
+        "editor" => "slate",
+        "content" => [
+          %{
+            "id" => "481387076",
+            "type" => "p",
+            "children" => [
+              %{
+                "text" => title
+              }
+            ]
+          }
+        ],
+        "textDirection" => "ltr"
+      },
+      "items" => [
+        %{
+          "id" => "1801321981",
+          "editor" => "slate",
+          "content" => [
+            %{
+              "id" => "1756897531",
+              "type" => "p",
+              "children" => [
+                %{
+                  "text" => "item 1"
+                }
+              ]
+            }
+          ],
+          "required" => false,
+          "textDirection" => "ltr"
+        },
+        %{
+          "id" => "1",
+          "editor" => "slate",
+          "content" => [
+            %{
+              "id" => "1513586314",
+              "type" => "p",
+              "children" => [
+                %{
+                  "text" => "item 2"
+                }
+              ]
+            }
+          ],
+          "textDirection" => "ltr"
+        }
+      ],
+      "bibrefs" => [],
+      "choices" => [
+        %{
+          "id" => "id_for_option_a",
+          "value" => %{
+            "type" => 0
+          },
+          "editor" => "slate",
+          "content" => [
+            %{
+              "id" => "2993895163",
+              "type" => "p",
+              "children" => [
+                %{
+                  "text" => "Agree"
+                }
+              ]
+            }
+          ],
+          "textDirection" => "ltr"
+        },
+        %{
+          "id" => "id_for_option_b",
+          "value" => %{
+            "type" => 0
+          },
+          "editor" => "slate",
+          "content" => [
+            %{
+              "id" => "2480215248",
+              "type" => "p",
+              "children" => [
+                %{
+                  "text" => "Neither Agree Nor Disagree"
+                }
+              ]
+            }
+          ],
+          "textDirection" => "ltr"
+        },
+        %{
+          "id" => "2744313274",
+          "value" => %{
+            "type" => 0
+          },
+          "editor" => "slate",
+          "content" => [
+            %{
+              "id" => "1677958907",
+              "type" => "p",
+              "children" => [
+                %{
+                  "text" => "Disagree"
+                }
+              ]
+            }
+          ],
+          "textDirection" => "ltr"
+        }
+      ],
+      "authoring" => %{
+        "parts" => [
+          %{
+            "id" => "1",
+            "hints" => [
+              %{
+                "id" => "3815680172",
+                "editor" => "slate",
+                "content" => [
+                  %{
+                    "id" => "1086576948",
+                    "type" => "p",
+                    "children" => [
+                      %{
+                        "text" => ""
+                      }
+                    ]
+                  }
+                ],
+                "textDirection" => "ltr"
+              },
+              %{
+                "id" => "2087690726",
+                "editor" => "slate",
+                "content" => [
+                  %{
+                    "id" => "11486367",
+                    "type" => "p",
+                    "children" => [
+                      %{
+                        "text" => ""
+                      }
+                    ]
+                  }
+                ],
+                "textDirection" => "ltr"
+              },
+              %{
+                "id" => "1328056631",
+                "editor" => "slate",
+                "content" => [
+                  %{
+                    "id" => "3113974429",
+                    "type" => "p",
+                    "children" => [
+                      %{
+                        "text" => ""
+                      }
+                    ]
+                  }
+                ],
+                "textDirection" => "ltr"
+              }
+            ],
+            "outOf" => nil,
+            "targets" => [],
+            "responses" => [
+              %{
+                "id" => "1506873322",
+                "rule" => "input like %{2059901803}",
+                "score" => 1,
+                "correct" => true,
+                "feedback" => %{
+                  "id" => "3973552980",
+                  "editor" => "slate",
+                  "content" => [
+                    %{
+                      "id" => "560772231",
+                      "type" => "p",
+                      "children" => [
+                        %{
+                          "text" => "Correct"
+                        }
+                      ]
+                    }
+                  ],
+                  "textDirection" => "ltr"
+                }
+              },
+              %{
+                "id" => "3417030249",
+                "rule" => "input like %{.*}",
+                "score" => 0,
+                "feedback" => %{
+                  "id" => "2851599196",
+                  "editor" => "slate",
+                  "content" => [
+                    %{
+                      "id" => "3187218957",
+                      "type" => "p",
+                      "children" => [
+                        %{
+                          "text" => "Incorrect"
+                        }
+                      ]
+                    }
+                  ],
+                  "textDirection" => "ltr"
+                }
+              }
+            ],
+            "gradingApproach" => "automatic",
+            "scoringStrategy" => "average"
+          },
+          %{
+            "id" => "1",
+            "hints" => [
+              %{
+                "id" => "3763332041",
+                "editor" => "slate",
+                "content" => [
+                  %{
+                    "id" => "38052499",
+                    "type" => "p",
+                    "children" => [
+                      %{
+                        "text" => ""
+                      }
+                    ]
+                  }
+                ],
+                "textDirection" => "ltr"
+              },
+              %{
+                "id" => "665246757",
+                "editor" => "slate",
+                "content" => [
+                  %{
+                    "id" => "3064108522",
+                    "type" => "p",
+                    "children" => [
+                      %{
+                        "text" => ""
+                      }
+                    ]
+                  }
+                ],
+                "textDirection" => "ltr"
+              },
+              %{
+                "id" => "1510363789",
+                "editor" => "slate",
+                "content" => [
+                  %{
+                    "id" => "3760829234",
+                    "type" => "p",
+                    "children" => [
+                      %{
+                        "text" => ""
+                      }
+                    ]
+                  }
+                ],
+                "textDirection" => "ltr"
+              }
+            ],
+            "outOf" => nil,
+            "targets" => [],
+            "responses" => [
+              %{
+                "id" => "1625009830",
+                "rule" => "input like %{2059901803}",
+                "score" => 1,
+                "correct" => true,
+                "feedback" => %{
+                  "id" => "3396414840",
+                  "editor" => "slate",
+                  "content" => [
+                    %{
+                      "id" => "3625710370",
+                      "type" => "p",
+                      "children" => [
+                        %{
+                          "text" => "Correct"
+                        }
+                      ]
+                    }
+                  ],
+                  "textDirection" => "ltr"
+                }
+              },
+              %{
+                "id" => "2686336238",
+                "rule" => "input like %{.*}",
+                "score" => 0,
+                "feedback" => %{
+                  "id" => "1381016321",
+                  "editor" => "slate",
+                  "content" => [
+                    %{
+                      "id" => "798578659",
+                      "type" => "p",
+                      "children" => [
+                        %{
+                          "text" => "Incorrect"
+                        }
+                      ]
+                    }
+                  ],
+                  "textDirection" => "ltr"
+                }
+              }
+            ],
+            "gradingApproach" => "automatic",
+            "scoringStrategy" => "average"
+          }
+        ],
+        "targeted" => [],
+        "previewText" => "",
+        "transformations" => []
+      },
+      "activityTitle" => "",
+      "orderDescending" => false
+    }
   end
 end

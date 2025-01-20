@@ -225,8 +225,17 @@ defmodule Oli.Interop.Ingest do
 
     new_product_attrs = %{
       "welcome_title" => Map.get(product, "welcomeTitle"),
-      "encouraging_subtitle" => Map.get(product, "encouragingSubtitle")
+      "encouraging_subtitle" => Map.get(product, "encouragingSubtitle"),
+      "requires_payment" => Map.get(product, "requiresPayment"),
+      "payment_options" => Map.get(product, "paymentOptions"),
+      "pay_by_institution" => Map.get(product, "payByInstitution"),
+      "grace_period_days" => Map.get(product, "gracePeriodDays"),
+      "amount" => Map.get(product, "amount")
     }
+
+    # '|| "null"' ensures a valid value is applied when a certificate is
+    # NOT present in the project's bundle.
+    certificate_params = Jason.decode!(Map.get(product, "certificate") || "null")
 
     # Create the blueprint (aka 'product'), with the hierarchy definition that was just built
     # to mirror the product JSON.
@@ -237,7 +246,21 @@ defmodule Oli.Interop.Ingest do
            hierarchy_definition,
            new_product_attrs
          ) do
-      {:ok, _} -> {:ok, container_map}
+      {:ok, blueprint} ->
+        maybe_add_certificate(certificate_params, blueprint, container_map)
+
+      e ->
+        e
+    end
+  end
+
+  defp maybe_add_certificate(nil, _blueprint, container_map), do: {:ok, container_map}
+
+  defp maybe_add_certificate(certificate_params, blueprint, container_map) do
+    certificate_params = Map.put(certificate_params, "section_id", blueprint.id)
+
+    case Oli.Delivery.Certificates.create(certificate_params) do
+      {:ok, _certificate} -> {:ok, container_map}
       e -> e
     end
   end

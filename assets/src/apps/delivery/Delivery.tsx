@@ -113,26 +113,49 @@ const Delivery: React.FC<DeliveryProps> = ({
   }, [screenIdleExpirationTime]);
 
   const handleUserThemePreferende = () => {
-    switch (getModeFromLocalStorage()) {
-      case 'dark':
-        setCurrentTheme('dark');
-        break;
-      case 'auto':
-        if (isDarkMode()) {
+    const isDarkModeThemeEnabled = content?.custom?.darkModeSetting;
+    // If dark mode is disabled, do not apply the dark theme to the lesson.
+    // If dark mode is enabled, apply the theme based on the student's selected theme (default current behavior).
+    if (!isDarkModeThemeEnabled) {
+      setCurrentTheme('light');
+    } else {
+      switch (getModeFromLocalStorage()) {
+        case 'dark':
           setCurrentTheme('dark');
-        } else {
+          break;
+        case 'auto':
+          if (isDarkMode()) {
+            setCurrentTheme('dark');
+          } else {
+            setCurrentTheme('light');
+          }
+          break;
+        case 'light':
           setCurrentTheme('light');
-        }
-        break;
-      case 'light':
-        setCurrentTheme('light');
-        break;
+          break;
+      }
     }
   };
   useEffect(() => {
     setInitialPageState();
     handleUserThemePreferende();
   }, []);
+
+  useEffect(() => {
+    const displayRefreshWarningPopup = content?.custom?.displayRefreshWarningPopup || true;
+
+    // Only show the prompt if it's not in preview mode and not in review mode
+    if (displayRefreshWarningPopup && isInstructor && !previewMode && !reviewMode) {
+      const unloadCallback = (event: any) => {
+        event.preventDefault();
+        event.returnValue = '';
+        return '';
+      };
+
+      window.addEventListener('beforeunload', unloadCallback);
+      return () => window.removeEventListener('beforeunload', unloadCallback);
+    }
+  }, [content?.custom?.displayRefreshWarningPopup]);
 
   const setInitialPageState = () => {
     // the standard lib relies on first the userId and userName session variables being set

@@ -97,20 +97,20 @@ const Step3Advanced: React.FC<{
         <h2>Note</h2>
 
         <p>
-          Projects created in Advanced Authoring do not open in Basic Authoring. This requires
+          Projects created in Advanced Authoring do not open in Simple Authoring. This requires
           creating a new lesson project.
         </p>
       </div>
       <div className="wizard-footer">
         <div className="wizard-step">Step 3/3</div>
         <div className="wizard-buttons">
-          <Button onClick={onBack} variant="link">
-            <LeftArrow />
+          <Button onClick={onBack}>
+            <LeftArrow stroke="#FFFFFF" />
             Back
           </Button>
-          <Button onClick={onNext} variant="link">
+          <Button onClick={onNext}>
             Next
-            <RightArrow />
+            <RightArrow stroke="#FFFFFF" />
           </Button>
         </div>
       </div>
@@ -153,13 +153,13 @@ const Step3: React.FC<{
       <div className="wizard-footer">
         <div className="wizard-step">Step 3/3</div>
         <div className="wizard-buttons">
-          <Button onClick={onBack} variant="link">
-            <LeftArrow />
+          <Button onClick={onBack}>
+            <LeftArrow stroke="#FFFFFF" />
             Back
           </Button>
-          <Button disabled={selected === 0} onClick={onNext} variant="link">
+          <Button disabled={selected === 0} onClick={onNext}>
             Next
-            <RightArrow />
+            <RightArrow stroke={selected === 0 ? '#737373' : '#FFFFFF'} />
           </Button>
         </div>
       </div>
@@ -185,7 +185,7 @@ const Step2: React.FC<{
             <div className="big-icon">
               <D6 />
             </div>
-            <label>Basic authoring</label>
+            <label>Simple authoring</label>
             <p>Easily build lessons using templates, simplified interactions, and conditioning.</p>
           </div>
           <div
@@ -203,13 +203,13 @@ const Step2: React.FC<{
       <div className="wizard-footer">
         <div className="wizard-step">Step 2/3</div>
         <div className="wizard-buttons">
-          <Button onClick={onBack} variant="link">
-            <LeftArrow />
+          <Button onClick={onBack}>
+            <LeftArrow stroke="#FFFFFF" />
             Back
           </Button>
-          <Button disabled={selected === 0} onClick={onNext} variant="link">
+          <Button disabled={selected === 0} onClick={onNext}>
             Next
-            <RightArrow />
+            <RightArrow stroke={selected === 0 ? '#737373' : '#FFFFFF'} />
           </Button>
         </div>
       </div>
@@ -225,21 +225,23 @@ const Step1: React.FC<{
   return (
     <div className="wizard-content">
       <h1 className="wizard-header">1. Write a title for your lesson</h1>
-      <div className="wizard-body">
+      <div className="wizard-body step-1">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           type="text"
           className="title-input"
-          placeholder="Enter title..."
+          placeholder="Add lesson title..."
         />
       </div>
       <div className="wizard-footer">
         <div className="wizard-step">Step 1/3</div>
-        <Button disabled={title.length === 0} onClick={onNext} variant="link">
-          Next
-          <RightArrow />
-        </Button>
+        <div className="wizard-buttons">
+          <Button disabled={title.length === 0} onClick={onNext}>
+            Next
+            <RightArrow stroke={title.length === 0 ? '#737373' : '#FFFFFF'} />
+          </Button>
+        </div>
       </div>
     </div>
   );

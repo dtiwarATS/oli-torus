@@ -9,7 +9,12 @@ import { PartAuthoringMode } from '../../../../components/parts/partsApi';
 import { clone } from '../../../../utils/common';
 import { IActivity } from '../../../delivery/store/features/activities/slice';
 import { saveActivity } from '../../store/activities/actions/saveActivity';
-import { selectAppMode, setCopiedPart, setRightPanelActiveTab } from '../../store/app/slice';
+import {
+  selectAppMode,
+  setCopiedPart,
+  setCopiedPartActivityId,
+  setRightPanelActiveTab,
+} from '../../store/app/slice';
 import { setCurrentPartPropertyFocus, setCurrentSelection } from '../../store/parts/slice';
 import ConfirmDelete from '../Modal/DeleteConfirmationModal';
 import PropertyEditor from '../PropertyEditor/PropertyEditor';
@@ -174,7 +179,7 @@ const getExpertComponentUISchema = (instance: any) => {
     };
     return newUiSchema;
   }
-  return partUiSchema; // default ui schema for components that don't specify.
+  return partUiSchema; // default ui schema  for components that don't specify.
 };
 
 export const PartPropertyEditor: React.FC<Props> = ({
@@ -256,6 +261,7 @@ export const PartPropertyEditor: React.FC<Props> = ({
         return;
       }
       dispatch(setCopiedPart({ copiedPart: partDef }));
+      dispatch(setCopiedPartActivityId({ copiedPart: currentActivity?.id }));
     }
   }, [currentActivity, currentPartSelection, dispatch]);
 
@@ -326,8 +332,12 @@ export const PartPropertyEditor: React.FC<Props> = ({
 
   if (!partDef) return null;
 
+  const selectPartType = selectedPartDef?.type || '';
+
   return (
-    <div className="component-tab p-3 overflow-hidden part-property-editor">
+    <div
+      className={`component-tab p-3 overflow-hidden part-property-editor ${selectPartType}-part-property`}
+    >
       {selectedPartDef && partEditMode === 'expert' && (
         <ButtonToolbar aria-label="Component Tools">
           <ButtonGroup className="me-2" aria-label="First group">

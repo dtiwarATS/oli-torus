@@ -32,6 +32,24 @@ defmodule Oli.Delivery.Settings do
     combine(resolved_revision, section_resource, nil)
   end
 
+  @doc """
+  For a ResourceAttempt, return the combined settings for that page, section, and user. This is the settings that will
+  be used for the user when they are viewing the page. This takes into account any
+  instructor customizations for the section, as well as any student exceptions for the
+  user.
+  """
+  def get_combined_settings(%ResourceAttempt{} = resource_attempt) do
+    %{revision: resolved_revision, resource_access: %{user_id: user_id, section_id: section_id}} =
+      Repo.preload(resource_attempt, [:revision, :resource_access])
+
+    section_resource =
+      Oli.Delivery.Sections.get_section_resource(section_id, resolved_revision.resource_id)
+
+    student_exception = get_student_exception(resolved_revision.resource_id, section_id, user_id)
+
+    combine(resolved_revision, section_resource, student_exception)
+  end
+
   def get_combined_settings_for_all_resources(section_id, user_id, resource_ids \\ nil) do
     section = Oli.Delivery.Sections.get_section!(section_id)
 
@@ -154,6 +172,7 @@ defmodule Oli.Delivery.Settings do
 
     %Combined{
       resource_id: resolved_revision.resource_id,
+      scheduling_type: section_resource.scheduling_type,
       start_date: combine_field(:start_date, section_resource, student_exception),
       end_date: combine_field(:end_date, section_resource, student_exception),
       max_attempts: max_attempts,
@@ -171,7 +190,8 @@ defmodule Oli.Delivery.Settings do
       feedback_scheduled_date:
         combine_field(:feedback_scheduled_date, section_resource, student_exception),
       collab_space_config: collab_space_config,
-      explanation_strategy: explanation_strategy
+      explanation_strategy: explanation_strategy,
+      allow_hints: section_resource.allow_hints
     }
   end
 
@@ -267,11 +287,18 @@ defmodule Oli.Delivery.Settings do
   def check_end_date(%Combined{end_date: end_date} = effective_settings) do
     effective_end_date = DateTime.add(end_date, effective_settings.grace_period, :minute)
 
-    if DateTime.compare(effective_end_date, DateTime.utc_now()) == :gt or
-         effective_settings.late_start == :allow do
-      {:allowed}
-    else
-      {:end_date_passed}
+    cond do
+      DateTime.compare(effective_end_date, DateTime.utc_now()) == :gt ->
+        {:allowed}
+
+      effective_settings.late_start == :allow ->
+        {:allowed}
+
+      effective_settings.scheduling_type == :read_by ->
+        {:allowed}
+
+      true ->
+        {:end_date_passed}
     end
   end
 

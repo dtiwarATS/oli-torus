@@ -11,7 +11,6 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
   alias Oli.Delivery.Sections
   alias Oli.Resources.ResourceType
   alias OliWeb.Delivery.Student.Utils
-  alias OliWeb.Pow.PowHelpers
 
   @default_selected_view :gallery
 
@@ -340,7 +339,8 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
         base_project: project,
         title: "The best course ever!",
         start_date: ~U[2023-10-30 20:00:00Z],
-        analytics_version: :v2
+        analytics_version: :v2,
+        assistant_enabled: true
       )
 
     {:ok, section} = Sections.create_section_resources(section, publication)
@@ -357,7 +357,9 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
     Sections.get_section_resource(section.id, page_2_revision.resource_id)
     |> Sections.update_section_resource(%{
       start_date: ~U[2023-11-10 20:00:00Z],
-      end_date: ~U[2023-11-14 20:00:00Z]
+      end_date: ~U[2023-11-14 20:00:00Z],
+      late_submit: :disallow,
+      scheduling_type: :due_by
     })
 
     # enable collaboration spaces for all pages in the section
@@ -413,7 +415,7 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
         live(conn, Utils.prologue_live_path(section.slug, page_1.slug))
 
       assert redirect_path ==
-               "/?request_path=%2Fsections%2F#{section.slug}%2Fprologue%2F#{page_1.slug}&section=#{section.slug}"
+               "/users/log_in"
     end
   end
 
@@ -676,12 +678,16 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
 
       attempt = create_attempt(user, section, page_3)
 
-      request_path = Utils.learn_live_path(section.slug, target_resource_id: page_3.resource_id)
+      learn_path =
+        Utils.learn_live_path(section.slug, target_resource_id: page_3.resource_id)
+
+      prologue_path =
+        Utils.prologue_live_path(section.slug, page_3.slug, request_path: learn_path)
 
       {:ok, view, _html} =
         live(
           conn,
-          Utils.prologue_live_path(section.slug, page_3.slug, request_path: request_path)
+          prologue_path
         )
 
       view
@@ -691,7 +697,7 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
       assert_redirected(
         view,
         Utils.review_live_path(section.slug, page_3.slug, attempt.attempt_guid,
-          request_path: request_path
+          request_path: prologue_path
         )
       )
     end
@@ -708,17 +714,20 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
 
       attempt = create_attempt(user, section, graded_adaptive_page_revision)
 
-      request_path =
+      learn_path =
         Utils.learn_live_path(section.slug,
           target_resource_id: graded_adaptive_page_revision.resource_id
+        )
+
+      prologue_path =
+        Utils.prologue_live_path(section.slug, graded_adaptive_page_revision.slug,
+          request_path: learn_path
         )
 
       {:ok, view, _html} =
         live(
           conn,
-          Utils.prologue_live_path(section.slug, graded_adaptive_page_revision.slug,
-            request_path: request_path
-          )
+          prologue_path
         )
 
       view
@@ -727,7 +736,7 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
 
       assert_redirected(
         view,
-        ~p"/sections/#{section.slug}/lesson/#{graded_adaptive_page_revision.slug}/attempt/#{attempt.attempt_guid}/review?#{%{request_path: request_path}}"
+        ~p"/sections/#{section.slug}/lesson/#{graded_adaptive_page_revision.slug}/attempt/#{attempt.attempt_guid}/review?#{%{request_path: prologue_path}}"
       )
 
       # Note that the student will then be redirected to the adaptive chromeless review path in OliWeb.LiveSessionPlugs.RedirectAdaptiveChromeless
@@ -1025,16 +1034,16 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
       redirect_path_1 = "/sections/#{section.slug}/lesson/#{graded_adaptive_page_revision.slug}"
       assert redirected_to(conn, 302) =~ redirect_path_1
 
-      conn = Pow.Plug.assign_current_user(recycle(conn), user, PowHelpers.get_pow_config(:user))
+      conn = log_in_user(recycle(conn), user)
 
       conn = get(conn, redirect_path_1)
 
       redirect_path_2 =
-        "/sections/#{section.slug}/prologue/#{graded_adaptive_page_revision.slug}?request_path=&selected_view="
+        "/sections/#{section.slug}/prologue/#{graded_adaptive_page_revision.slug}"
 
       assert redirected_to(conn, 302) =~ redirect_path_2
 
-      conn = Pow.Plug.assign_current_user(recycle(conn), user, PowHelpers.get_pow_config(:user))
+      conn = log_in_user(recycle(conn), user)
       {:ok, view, _html} = live(conn, redirect_path_2)
 
       [href] =
@@ -1045,6 +1054,91 @@ defmodule OliWeb.Delivery.Student.PrologueLiveTest do
 
       assert href ==
                "/sections/#{section.slug}/learn?target_resource_id=#{graded_adaptive_page_revision.resource_id}"
+    end
+
+    test "page terms are shown correctly when page is not yet scheduled",
+         %{
+           conn: conn,
+           user: user,
+           section: section,
+           page_5: page_5
+         } do
+      enroll_and_mark_visited(user, section)
+
+      {:ok, view, _html} = live(conn, Utils.prologue_live_path(section.slug, page_5.slug))
+
+      assert view |> element("#page_terms") |> render() =~
+               "This assignment is <b>not yet scheduled.</b>"
+    end
+
+    test "page terms render the due date when is set", ctx do
+      %{conn: conn, user: user, section: section, page_2: page_2} = ctx
+
+      enroll_and_mark_visited(user, section)
+
+      {:ok, view, _html} = live(conn, Utils.prologue_live_path(section.slug, page_2.slug))
+
+      assert view |> element("#page_due_terms") |> render() =~ "This assignment was due on"
+
+      assert view |> element("#page_due_terms") |> render() =~ "Tue Nov 14, 2023 by 8:00pm."
+    end
+
+    test "page terms are shown correctly when page is scheduled", ctx do
+      %{conn: conn, user: user, section: section, page_2: page_2} = ctx
+
+      enroll_and_mark_visited(user, section)
+
+      params = %{scoring_strategy_id: 1}
+
+      get_and_update_section_resource(section.id, page_2.resource_id, params)
+
+      {:ok, view, _html} = live(conn, Utils.prologue_live_path(section.slug, page_2.slug))
+
+      assert view |> element("#page_scoring_terms") |> render() =~
+               "Your overall score for this assignment will be the average score of your attempts."
+    end
+
+    test "page terms render a time limit message", ctx do
+      %{conn: conn, user: user, section: section, page_2: page_2} = ctx
+
+      enroll_and_mark_visited(user, section)
+
+      params = %{time_limit: 1}
+
+      get_and_update_section_resource(section.id, page_2.resource_id, params)
+
+      {:ok, view, _html} = live(conn, Utils.prologue_live_path(section.slug, page_2.slug))
+
+      assert view |> element("#page_due_terms") |> render() =~
+               "This assignment was due on"
+
+      assert view |> element("#page_time_limit_term") |> render() =~
+               "<li id=\"page_time_limit_term\">\n  You have <b>1 minute</b>\n  to complete the assessment from the time you begin. If you exceed this time, it will be marked as late.\n</li>"
+    end
+
+    defp enroll_and_mark_visited(user, section) do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+    end
+
+    defp get_and_update_section_resource(section_id, resource_id, updated_params) do
+      Sections.get_section_resource(section_id, resource_id)
+      |> Sections.update_section_resource(updated_params)
+    end
+
+    test "can not see DOT AI Bot interface if it's on a scored page", %{
+      conn: conn,
+      user: user,
+      section: section,
+      page_1: page_1
+    } do
+      Sections.enroll(user.id, section.id, [ContextRoles.get_role(:context_learner)])
+      Sections.mark_section_visited_for_student(section, user)
+
+      {:ok, view, _html} = live(conn, Utils.prologue_live_path(section.slug, page_1.slug))
+
+      refute has_element?(view, "div[id='dialogue-window']")
+      refute has_element?(view, "div[id=ai_bot_collapsed]")
     end
   end
 

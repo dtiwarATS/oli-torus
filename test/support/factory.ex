@@ -2,7 +2,7 @@ defmodule Oli.Factory do
   use ExMachina.Ecto, repo: Oli.Repo
 
   alias Oli.Accounts.VrUserAgent
-  alias Oli.Accounts.{Author, User, AuthorPreferences, UserPreferences}
+  alias Oli.Accounts.{Author, User, AuthorPreferences, AuthorToken, UserPreferences, UserToken}
   alias Oli.Authoring.Authors.{AuthorProject, ProjectRole}
   alias Oli.Analytics.Summary.ResourceSummary
 
@@ -16,6 +16,8 @@ defmodule Oli.Factory do
 
   alias Oli.Branding.Brand
   alias Oli.Delivery.Page.PageContext
+  alias Oli.Delivery.Sections.Certificate
+  alias Oli.Delivery.Sections.GrantedCertificate
   alias Oli.Delivery.Sections.ContainedObjective
 
   alias Oli.Delivery.Attempts.Core.{
@@ -28,7 +30,6 @@ defmodule Oli.Factory do
 
   alias Oli.Delivery.Settings.StudentException
   alias Oli.Delivery.Gating.GatingCondition
-  alias Oli.Delivery.Snapshots.Snapshot
   alias Oli.Lti.LtiParams
 
   alias Oli.Delivery.Sections.{
@@ -52,8 +53,12 @@ defmodule Oli.Factory do
   alias Oli.Search.RevisionEmbedding
 
   def author_factory() do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
     %Author{
       email: "#{sequence("author")}@example.edu",
+      email_verified: true,
+      email_confirmed_at: now,
       name: "Author name",
       given_name: sequence("Author given name"),
       family_name: "Author family name",
@@ -69,8 +74,12 @@ defmodule Oli.Factory do
   end
 
   def user_factory() do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
     %User{
       email: "#{sequence("user")}@example.edu",
+      email_verified: true,
+      email_confirmed_at: now,
       name: sequence("User name"),
       given_name: sequence("User given name"),
       family_name: "User family name",
@@ -156,7 +165,8 @@ defmodule Oli.Factory do
     %AuthorProject{
       author_id: author.id,
       project_id: project.id,
-      project_role_id: ProjectRole.role_id().owner
+      project_role_id: ProjectRole.role_id().owner,
+      status: :accepted
     }
   end
 
@@ -426,7 +436,8 @@ defmodule Oli.Factory do
       amount: Money.new(:USD, 25),
       provider_type: :stripe,
       section: anonymous_build(:section),
-      enrollment: anonymous_build(:enrollment)
+      enrollment: anonymous_build(:enrollment),
+      generation_date: DateTime.utc_now()
     }
   end
 
@@ -462,28 +473,6 @@ defmodule Oli.Factory do
       section: anonymous_build(:section),
       slug: sequence("exampleinvite"),
       date_expires: date_expires
-    }
-  end
-
-  def snapshot_factory() do
-    revision = insert(:revision)
-
-    %Snapshot{
-      resource: revision.resource,
-      activity: revision.resource,
-      user: anonymous_build(:user),
-      section: anonymous_build(:section),
-      part_attempt: anonymous_build(:part_attempt),
-      revision: revision,
-      part_id: sequence("part_id"),
-      score: Enum.random(0..100),
-      out_of: 100,
-      correct: true,
-      hints: 0,
-      attempt_number: 1,
-      part_attempt_number: 1,
-      resource_attempt_number: 1,
-      activity_type_id: 1
     }
   end
 
@@ -658,6 +647,49 @@ defmodule Oli.Factory do
     %ResourceSummary{
       num_correct: 5,
       num_attempts: 10
+    }
+  end
+
+  def certificate_factory() do
+    %Certificate{
+      title: "#{sequence("certificate")}",
+      section: anonymous_build(:section)
+    }
+  end
+
+  def granted_certificate_factory() do
+    %GrantedCertificate{
+      guid: UUID.uuid4(),
+      user: build(:user),
+      certificate: build(:certificate)
+    }
+  end
+
+  def user_token_factory(attr) do
+    token = attr[:non_hashed_token] || :crypto.strong_rand_bytes(32)
+    hashed_token = :crypto.hash(:sha256, token)
+
+    user = attr[:user] || insert(:user)
+
+    %UserToken{
+      token: hashed_token,
+      context: attr[:context] || "session",
+      sent_to: user.email,
+      user_id: user.id
+    }
+  end
+
+  def author_token_factory(attr) do
+    token = attr[:non_hashed_token] || :crypto.strong_rand_bytes(32)
+    hashed_token = :crypto.hash(:sha256, token)
+
+    author = attr[:author] || insert(:author)
+
+    %AuthorToken{
+      token: hashed_token,
+      context: attr[:context] || "session",
+      sent_to: author.email,
+      author_id: author.id
     }
   end
 

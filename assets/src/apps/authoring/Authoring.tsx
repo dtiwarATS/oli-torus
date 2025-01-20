@@ -9,7 +9,6 @@ import { AuthoringFlowchartPageEditor } from './AuthoringFlowchartPageEditor';
 import { ReadOnlyWarning } from './ReadOnlyWarning';
 import { ModalContainer } from './components/AdvancedAuthoringModal';
 import { FlowchartEditor } from './components/Flowchart/FlowchartEditor';
-import KeepAlive from './components/Flowchart/KeepAlive';
 import { onboardWizardComplete } from './components/Flowchart/flowchart-actions/onboard-wizard-complete';
 import { OnboardWizard } from './components/Flowchart/onboard-wizard/OnboardWizard';
 import DiagnosticsWindow from './components/Modal/DiagnosticsWindow';
@@ -48,6 +47,7 @@ export interface AuthoringProps {
   resourceId?: number;
   paths: Record<string, string>;
   appsignalKey: string | null;
+  initialSidebarExpanded: boolean;
 }
 
 const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
@@ -119,6 +119,12 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
 
   const url = `/authoring/project/${projectSlug}/preview/${revisionSlug}`;
   const windowName = `preview-${projectSlug}`;
+
+  const [sidebarExpanded, setSidebarExpanded] = useState(props.initialSidebarExpanded);
+
+  const handleSidebarExpanded = () => {
+    setSidebarExpanded((prev) => !prev);
+  };
 
   const onOnboardComplete = (appMode: ApplicationMode, title: string) => {
     const { revisionSlug } = props;
@@ -239,10 +245,17 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
 
   return (
     <AppsignalContext.Provider value={appsignal}>
+      <button
+        role="update sidebar state on React"
+        className="hidden"
+        onClick={() => {
+          handleSidebarExpanded();
+        }}
+      ></button>
       <ErrorBoundary>
         <ModalContainer>
           {isLoading && (
-            <div id="aa-loading">
+            <div id="aa-loading" className="!z-10 -mt-2">
               <div className="loader spinner-border text-primary" role="status">
                 <span className="sr-only">Loading...</span>
               </div>
@@ -254,6 +267,7 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
               currentRule={currentRule}
               handlePanelStateChange={handlePanelStateChange}
               panelState={panelState}
+              sidebarExpanded={sidebarExpanded}
             />
           )}
 
@@ -261,10 +275,11 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
             <AuthoringFlowchartPageEditor
               handlePanelStateChange={handlePanelStateChange}
               panelState={panelState}
+              sidebarExpanded={sidebarExpanded}
             />
           )}
 
-          {shouldShowFlowchartEditor && <FlowchartEditor />}
+          {shouldShowFlowchartEditor && <FlowchartEditor sidebarExpanded={sidebarExpanded} />}
 
           {shouldShowReadOnlyWarning && (
             <ReadOnlyWarning
@@ -283,8 +298,6 @@ const Authoring: React.FC<AuthoringProps> = (props: AuthoringProps) => {
           {shouldShowOnboarding && (
             <OnboardWizard onSetupComplete={onOnboardComplete} initialTitle={props.content.title} />
           )}
-
-          <KeepAlive />
         </ModalContainer>
       </ErrorBoundary>
     </AppsignalContext.Provider>

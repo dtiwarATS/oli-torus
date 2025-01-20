@@ -34,7 +34,7 @@ defmodule OliWeb.Resources.AlternativesEditorTest do
       project: project
     } do
       redirect_path =
-        "/authoring/session/new?request_path=%2Fauthoring%2Fproject%2F#{project.slug}%2Falternatives"
+        "/authors/log_in"
 
       {:error, {:redirect, %{to: ^redirect_path}}} =
         live(
@@ -54,7 +54,7 @@ defmodule OliWeb.Resources.AlternativesEditorTest do
     test "redirects to not found when project does not exist", %{conn: conn} do
       {:error,
        {:redirect,
-        %{flash: %{"info" => "That project does not exist"}, to: "/authoring/projects"}}} =
+        %{flash: %{"info" => "That project does not exist"}, to: "/workspaces/course_author"}}} =
         live(
           conn,
           Routes.live_path(

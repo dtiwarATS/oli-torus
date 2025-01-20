@@ -12,6 +12,9 @@ defmodule OliWeb.Admin.IngestV2 do
   alias OliWeb.Admin.Ingest.ErrorsTableModel
   import OliWeb.DelegatedEvents
 
+  on_mount {OliWeb.AuthorAuth, :ensure_authenticated}
+  on_mount OliWeb.LiveSessionPlugs.SetCtx
+
   defp ingest_file(author) do
     "_digests/#{author.id}-digest.zip"
   end
@@ -118,7 +121,7 @@ defmodule OliWeb.Admin.IngestV2 do
     <%= if @ingestion_step == :processed do %>
       <h4>Ingest succeeded</h4>
 
-      <a href={Routes.live_path(OliWeb.Endpoint, OliWeb.Projects.OverviewLive, @state.project.slug)}>
+      <a href={~p"/workspaces/course_author/#{@state.project.slug}/overview"}>
         Access your new course here
       </a>
     <% end %>

@@ -3,14 +3,18 @@ import { AutoSelect } from './auto_select';
 import { BeforeUnloadListener } from './before_unload';
 import { CheckboxListener } from './checkbox_listener';
 import { ClickOutside } from './click_outside';
+import { ClickExecJS, HoverAway } from './click_variations';
 import { CopyListener } from './copy_listener';
 import { Countdown } from './countdown';
 import { CountdownTimer } from './countdown_timer';
 import { CustomFocusWrap } from './custom_focus_wrap';
 import { DateTimeLocalInputListener } from './datetimelocal_input_listener';
+import { DelayedSubmit } from './delayed_submit';
+import { DisableSubmitted } from './disable_submitted';
 import { DragSource, DropTarget } from './dragdrop';
 import { EmailList } from './email_list';
 import { EndDateTimer } from './end_date_timer';
+import { EvaluateMathJaxExpressions } from './evaluate_mathjax_expressions';
 import { GraphNavigation } from './graph';
 import { HierarchySelector } from './hierarchy_selector';
 import { InputAutoSelect } from './input_auto_select';
@@ -22,6 +26,8 @@ import { ModalLaunch } from './modal';
 import { MonacoEditor } from './monaco_editor';
 import { PointMarkers } from './point_markers';
 import { ProjectsTypeahead } from './projects_typeahead';
+import { ReactToLiveView } from './react_to_liveview';
+import { Recaptcha } from './recaptcha';
 import { ResizeListener } from './resize_listener';
 import { ReviewActivity } from './review_activity';
 import { Scroller } from './scroller';
@@ -33,11 +39,12 @@ import { TextInputListener } from './text_input_listener';
 import { TextareaListener } from './textarea_listener';
 import { ThemeToggle } from './theme_toggle';
 import { ToggleReadMore } from './toggle_read_more';
-import { TooltipInit, TooltipWithTarget } from './tooltip';
+import { AutoHideTooltip, TooltipInit, TooltipWithTarget } from './tooltip';
 import { VideoPlayer } from './video_player';
 import { PauseOthersOnSelected, VideoPreview } from './video_preview';
 
 export const Hooks = {
+  DelayedSubmit,
   GraphNavigation,
   DropTarget,
   DragSource,
@@ -54,6 +61,9 @@ export const Hooks = {
   MonacoEditor,
   TooltipInit,
   TooltipWithTarget,
+  AutoHideTooltip,
+  ClickExecJS,
+  HoverAway,
   BeforeUnloadListener,
   ThemeToggle,
   LtiConnectInstructions,
@@ -79,4 +89,8 @@ export const Hooks = {
   Countdown,
   CountdownTimer,
   EndDateTimer,
+  EvaluateMathJaxExpressions,
+  ReactToLiveView,
+  DisableSubmitted,
+  Recaptcha,
 };

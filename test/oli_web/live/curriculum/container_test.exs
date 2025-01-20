@@ -19,7 +19,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
       project = insert(:project)
 
       redirect_path =
-        "/authoring/session/new?request_path=%2Fauthoring%2Fproject%2F#{project.slug}%2Fcurriculum"
+        "/authors/log_in"
 
       {:error, {:redirect, %{to: ^redirect_path}}} =
         live(conn, Routes.container_path(@endpoint, :index, project.slug))
@@ -35,7 +35,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
       project = insert(:project)
 
       redirect_path =
-        "/authoring/session/new?request_path=%2Fauthoring%2Fproject%2F#{project.slug}%2Fcurriculum"
+        "/authors/log_in"
 
       {:error, {:redirect, %{to: ^redirect_path}}} =
         live(conn, Routes.container_path(@endpoint, :index, project.slug))
@@ -63,10 +63,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
 
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          author,
-          OliWeb.Pow.PowHelpers.get_pow_config(:author)
-        )
+        |> log_in_author(author)
 
       conn = get(conn, redir_path)
 
@@ -114,10 +111,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
     } do
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          author,
-          OliWeb.Pow.PowHelpers.get_pow_config(:author)
-        )
+        |> log_in_author(author)
         |> get("/authoring/project/#{project.slug}/curriculum/")
 
       {:ok, view, _html} = live(conn)
@@ -146,10 +140,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
     } do
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          author,
-          OliWeb.Pow.PowHelpers.get_pow_config(:author)
-        )
+        |> log_in_author(author)
         |> get("/authoring/project/#{project.slug}/curriculum/")
 
       {:ok, view, _html} = live(conn)
@@ -171,10 +162,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
     } do
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          author,
-          OliWeb.Pow.PowHelpers.get_pow_config(:author)
-        )
+        |> log_in_author(author)
         |> get("/authoring/project/#{project.slug}/curriculum/")
 
       {:ok, view, _html} = live(conn)
@@ -240,10 +228,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
          } do
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          author,
-          OliWeb.Pow.PowHelpers.get_pow_config(:author)
-        )
+        |> log_in_author(author)
         |> get("/authoring/project/#{project.slug}/curriculum/")
 
       {:ok, view, _html} = live(conn)
@@ -275,10 +260,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
     } do
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          author,
-          OliWeb.Pow.PowHelpers.get_pow_config(:author)
-        )
+        |> log_in_author(author)
         |> get("/authoring/project/#{project.slug}/curriculum/")
 
       {:ok, view, _html} = live(conn)
@@ -312,10 +294,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
     } do
       conn =
         recycle(conn)
-        |> Pow.Plug.assign_current_user(
-          author,
-          OliWeb.Pow.PowHelpers.get_pow_config(:author)
-        )
+        |> log_in_author(author)
         |> get("/authoring/project/#{project.slug}/curriculum")
         |> Map.put(
           :request_path,
@@ -622,6 +601,79 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
                  page_2.slug
                )
     end
+
+    test "an explanation strategy text input has a default value if after set num attempts option is selected",
+         %{
+           conn: conn,
+           project: project,
+           page_2: page_2
+         } do
+      {:ok, view, _html} =
+        live(conn, ~p"/authoring/project/#{project.slug}/curriculum")
+
+      # open options modal
+      view
+      |> element(
+        ~s{button[role="show_options_modal"][phx-value-slug="#{page_2.slug}"]},
+        "Options"
+      )
+      |> render_click()
+
+      # change explanation strategy to 'after set num attempts'
+      view
+      |> form("form#revision-settings-form")
+      |> render_change(%{
+        "revision" => %{
+          "explanation_strategy" => %{"type" => "after_set_num_attempts"}
+        }
+      })
+
+      # assert that input to set num attempts value is present with default value 2
+      assert has_element?(
+               view,
+               "input[id='revision_explanation_strategy_0_set_num_attempts'][value='2']"
+             )
+
+      # change value to 5
+      view
+      |> form("form#revision-settings-form")
+      |> render_change(%{
+        "revision" => %{
+          "explanation_strategy" => %{
+            "type" => "after_set_num_attempts",
+            "set_num_attempts" => "5"
+          }
+        }
+      })
+
+      # submit the form
+      view
+      |> form("form#revision-settings-form")
+      |> render_submit(%{})
+
+      {:ok, view, _html} =
+        live(conn, ~p"/authoring/project/#{project.slug}/curriculum")
+
+      # open options modal again
+      view
+      |> element(
+        ~s{button[role="show_options_modal"][phx-value-slug="#{page_2.slug}"]},
+        "Options"
+      )
+      |> render_click()
+
+      # assert that explanation strategy is set to 'after set num attempts'
+      assert has_element?(
+               view,
+               "option[value='after_set_num_attempts'][selected]"
+             )
+
+      # assert that input to set num attempts value is present with value 5
+      assert has_element?(
+               view,
+               "input[id='revision_explanation_strategy_0_set_num_attempts'][value='5']"
+             )
+    end
   end
 
   describe "Delete page" do
@@ -737,10 +789,7 @@ defmodule OliWeb.Curriculum.ContainerLiveTest do
 
     conn =
       Plug.Test.init_test_session(conn, lti_session: nil)
-      |> Pow.Plug.assign_current_user(
-        map.author,
-        OliWeb.Pow.PowHelpers.get_pow_config(:author)
-      )
+      |> log_in_author(map.author)
 
     {:ok,
      conn: conn,

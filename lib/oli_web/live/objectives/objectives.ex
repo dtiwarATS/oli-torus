@@ -30,6 +30,8 @@ defmodule OliWeb.ObjectivesLive.Objectives do
   @table_filter_fn &__MODULE__.filter_rows/3
   @table_push_patch_path &__MODULE__.live_path/2
 
+  on_mount {OliWeb.AuthorAuth, :ensure_authenticated}
+
   def filter_rows(socket, query, _filter) do
     query_str = String.downcase(query)
 
@@ -43,11 +45,11 @@ defmodule OliWeb.ObjectivesLive.Objectives do
 
   def mount(
         %{"project_id" => project_slug},
-        %{"current_author_id" => author_id} = _session,
+        _session,
         socket
       ) do
     project = Course.get_project_by_slug(project_slug)
-    author = Accounts.get_author(author_id)
+    author = socket.assigns.current_author
 
     {all_objectives, all_children, objectives, table_model} =
       build_objectives(project, [], fn socket -> socket end, true)
@@ -187,7 +189,8 @@ defmodule OliWeb.ObjectivesLive.Objectives do
         >
           <Listing.render
             revision_history_link={
-              @has_show_links_uri_hash and Accounts.at_least_content_admin?(@author)
+              (assigns[:has_show_links_uri_hash] || false) and
+                Accounts.at_least_content_admin?(@author)
             }
             rows={@table_model.rows}
             selected={@selected}

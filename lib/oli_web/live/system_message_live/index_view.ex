@@ -5,9 +5,12 @@ defmodule OliWeb.SystemMessageLive.IndexView do
 
   alias Oli.Notifications
   alias Oli.Notifications.{PubSub, SystemMessage}
-  alias OliWeb.Common.{Breadcrumb, Confirm, FormatDateTime, SessionContext}
+  alias OliWeb.Common.{Breadcrumb, Confirm, FormatDateTime}
   alias OliWeb.Router.Helpers, as: Routes
   alias OliWeb.SystemMessageLive.EditMessage
+
+  on_mount {OliWeb.AuthorAuth, :ensure_authenticated}
+  on_mount OliWeb.LiveSessionPlugs.SetCtx
 
   def breadcrumb() do
     OliWeb.Admin.AdminView.breadcrumb() ++
@@ -19,12 +22,11 @@ defmodule OliWeb.SystemMessageLive.IndexView do
       ]
   end
 
-  def mount(_, session, socket) do
+  def mount(_, _session, socket) do
     messages = Notifications.list_system_messages()
 
     {:ok,
      assign(socket,
-       ctx: SessionContext.init(socket, session),
        messages: messages,
        breadcrumbs: breadcrumb(),
        changeset: SystemMessage.changeset(%SystemMessage{}) |> to_form()
@@ -156,7 +158,7 @@ defmodule OliWeb.SystemMessageLive.IndexView do
     {:noreply, assign(socket, show_confirm: false, unsaved_system_message: nil)}
   end
 
-  def handle_event("_bsmodal.unmount", _, socket) do
+  def handle_event("phx_modal.unmount", _, socket) do
     {:noreply, assign(socket, show_confirm: false, unsaved_system_message: nil)}
   end
 

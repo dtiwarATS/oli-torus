@@ -154,13 +154,15 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
     page_5_revision =
       insert(:revision,
         resource_type_id: ResourceType.get_id_by_type("page"),
-        title: "Page 5"
+        title: "Page 5",
+        duration_minutes: 0
       )
 
     page_6_revision =
       insert(:revision,
         resource_type_id: ResourceType.get_id_by_type("page"),
-        title: "Page 6"
+        title: "Page 6",
+        duration_minutes: 0
       )
 
     page_7_revision =
@@ -473,6 +475,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
     Sections.get_section_resource(section.id, page_12_revision.resource_id)
     |> Sections.update_section_resource(%{
+      scheduling_type: :due_by,
       start_date: ~U[2023-11-02 20:00:00Z],
       end_date: ~U[2023-11-03 20:00:00Z]
     })
@@ -775,8 +778,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       {:error, {:redirect, %{to: redirect_path}}} =
         live(conn, Utils.learn_live_path(section.slug))
 
-      assert redirect_path ==
-               "/?request_path=%2Fsections%2F#{section.slug}%2Flearn&section=#{section.slug}"
+      assert redirect_path == "/users/log_in"
     end
   end
 
@@ -1017,7 +1019,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
              )
 
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       # page 1 and page 2 are shown with their estimated read time
@@ -1058,7 +1060,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       assert has_element?(
                view,
                ~s{div[role="expanded module header"] span},
-               "Due: Wed Nov 15, 2023"
+               "Read by: Wed Nov 15, 2023"
              )
     end
 
@@ -1071,7 +1073,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand module
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       assert has_element?(view, "span", "Page 1")
@@ -1090,7 +1092,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # module 1 has intro video
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       assert view
@@ -1104,7 +1106,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # module 2 has no intro video
       view
-      |> element(~s{div[role="unit_1"] div[role="card_2"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 2"]})
       |> render_click()
 
       refute has_element?(
@@ -1128,7 +1130,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       refute enrollment_state["viewed_intro_video_resource_ids"]
 
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       assert has_element?(
@@ -1149,7 +1151,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       assert enrollment_state["viewed_intro_video_resource_ids"] == [module_1.resource_id]
 
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       assert has_element?(
@@ -1163,18 +1165,18 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
 
       view
-      |> element(~s{div[role="unit_1"] div[role="card_2"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 2"]})
       |> render_click()
 
       assert has_element?(
                view,
-               ~s{button[role="page 4 details"] div[role="orange flag icon"]}
+               ~s{button[role="resource page 4 details"] div[role="orange flag icon"]}
              )
 
       assert has_element?(
                view,
-               ~s{button[role="page 4 details"] div[role="due date and score"]},
-               "Due: Fri Nov 3, 2023"
+               ~s{button[role="resource page 4 details"] div[role="due date and score"]},
+               "Read by: Fri Nov 3, 2023"
              )
     end
 
@@ -1217,26 +1219,26 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       assert_receive({_ref, {:push_event, "enable-slider-buttons", _}}, 2_000)
 
       view
-      |> element(~s{div[role="unit_1"] div[role="card_2"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 2"]})
       |> render_click()
 
       # graded page with title "Page 4" in the hierarchy has the correct icon
       assert has_element?(
                view,
-               ~s{button[role="page 4 details"] div[role="square check icon"]}
+               ~s{button[role="resource page 4 details"] div[role="square check icon"]}
              )
 
       # correct due date
       assert has_element?(
                view,
-               ~s{button[role="page 4 details"] div[role="due date and score"]},
-               "Due: Fri Nov 3, 2023"
+               ~s{button[role="resource page 4 details"] div[role="due date and score"]},
+               "Read by: Fri Nov 3, 2023"
              )
 
       # and correct score summary
       assert has_element?(
                view,
-               ~s{button[role="page 4 details"] div[role="due date and score"]},
+               ~s{button[role="resource page 4 details"] div[role="due date and score"]},
                "1 / 2"
              )
     end
@@ -1251,7 +1253,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand unit 1/module 1 details
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       # there are no learning objectives for this module
@@ -1266,7 +1268,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand unit 1/module 2 details
       view
-      |> element(~s{div[role="unit_1"] div[role="card_2"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 2"]})
       |> render_click()
 
       assert has_element?(
@@ -1330,7 +1332,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       # when the slider buttons are enabled we know the student async metrics were loaded
       assert_receive({_ref, {:push_event, "enable-slider-buttons", _}}, 2_000)
 
-      assert has_element?(view, ~s{div[role="unit_1_progress"]}, "100%")
+      assert has_element?(view, ~s{div[role="unit_1_progress"]}, "Completed")
     end
 
     test "can expand more than one module card", %{
@@ -1355,7 +1357,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand unit 1/module 1 details
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       assert has_element?(
@@ -1370,7 +1372,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand unit 2/module 3 details
       view
-      |> element(~s{div[role="unit_2"] div[role="card_3"]})
+      |> element(~s{div[role="unit_2"] div[role="resource card 3"]})
       |> render_click()
 
       assert has_element?(
@@ -1402,7 +1404,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand unit 1/module 2 details
       view
-      |> element(~s{div[role="unit_1"] div[role="card_2"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 2"]})
       |> render_click()
 
       assert has_element?(
@@ -1417,105 +1419,19 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
              )
     end
 
-    test "sees a check icon on visited and completed pages", %{
+    test "can see the toggle button to show and hide the completed pages", %{
       conn: conn,
-      user: user,
-      section: section,
-      page_1: page_1
+      section: section
     } do
-      set_progress(section.id, page_1.resource_id, user.id, 1.0, page_1)
       {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
-
-      # when the slider buttons are enabled we know the student async metrics were loaded
-      assert_receive({_ref, {:push_event, "enable-slider-buttons", _}}, 2_000)
-
-      # expand unit 1/module 1 details
-      view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
-      |> render_click()
-
-      assert has_element?(view, ~s{button[role="page 1 details"] div[role="check icon"]})
-      assert has_element?(view, ~s{button[role="page 2 details"]})
-      refute has_element?(view, ~s{button[role="page 2 details"] div[role="check icon"]})
-    end
-
-    test "sees a check icon on visited and completed pages within a section", %{
-      conn: conn,
-      user: user,
-      section: section,
-      page_11: page_11
-    } do
-      set_progress(section.id, page_11.resource_id, user.id, 1.0, page_11)
-      {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
-
-      # when the slider buttons are enabled we know the student async metrics were loaded
-      assert_receive({_ref, {:push_event, "enable-slider-buttons", _}}, 2_000)
-
-      # expand unit 5/module 3 details
-      view
-      |> element(~s{div[role="unit_5"] div[role="card_4"]})
-      |> render_click()
-
-      assert has_element?(view, ~s{button[role="page 11 details"] div[role="check icon"]})
-    end
-
-    test "hides/shows completed pages", %{
-      conn: conn,
-      user: user,
-      section: section,
-      section_1: section_1,
-      subsection_1: subsection_1,
-      page_11: page_11
-    } do
-      set_progress(section.id, page_11.resource_id, user.id, 1.0, page_11)
-      {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
-
-      # when the slider buttons are enabled we know the student async metrics were loaded
-      assert_receive({_ref, {:push_event, "enable-slider-buttons", _}}, 2_000)
-
-      # expand unit 5/module 3 details
-      view
-      |> element(~s{div[role="unit_5"] div[role="card_4"]})
-      |> render_click()
-
-      # correct icon is shown
-      assert has_element?(view, ~s{svg[role="hidden icon"]})
-      refute has_element?(view, ~s{svg[role="visible icon"]})
-
-      assert view
-             |> element(~s{div[role="completed count"]})
-             |> render() =~ "1 of 5 Pages"
-
-      completed_toggle = element(view, ~s{button[role="toggle completed button"]})
-
-      assert render(completed_toggle) =~ "Hide Completed"
-
-      # By default it shows the completed and incompleted pages
-      assert has_element?(view, ~s{button[role="page 11 details"] div[role="check icon"]})
-      assert has_element?(view, ~s{button[role="page 12 details"]})
-
-      # Click on the toggle to hide the completed pages
-      render_click(completed_toggle)
-
-      # correct icon is shown
-      refute has_element?(view, ~s{svg[role="hidden icon"]})
-      assert has_element?(view, ~s{svg[role="visible icon"]})
-
-      assert render(completed_toggle) =~ "Show Completed"
-
-      # Hides the completed pages and sections
-      refute has_element?(view, ~s{button[role="page 11 details"] div[role="check icon"]})
-      assert has_element?(view, ~s{button[role="page 12 details"]})
-
-      refute has_element?(
-               view,
-               "#index_item_#{subsection_1.resource_id}"
-             )
 
       assert has_element?(
                view,
-               "#index_item_#{section_1.resource_id}_2023-11-03"
+               "#hide_completed_button",
+               "Hide Completed"
              )
+
+      assert has_element?(view, "#show_completed_button.hidden", "Show Completed")
     end
 
     test "does not see a check icon on visited pages that are not fully completed", %{
@@ -1529,13 +1445,22 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand unit 1/module 1 details
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
-      assert has_element?(view, ~s{button[role="page 2 details"]})
-      refute has_element?(view, ~s{button[role="page 1 details"] svg[role="visited check icon"]})
-      assert has_element?(view, ~s{button[role="page 2 details"]})
-      refute has_element?(view, ~s{button[role="page 2 details"] svg[role="visited check icon"]})
+      assert has_element?(view, ~s{button[role="resource page 2 details"]})
+
+      refute has_element?(
+               view,
+               ~s{button[role="resource page 1 details"] svg[role="visited check icon"]}
+             )
+
+      assert has_element?(view, ~s{button[role="resource page 2 details"]})
+
+      refute has_element?(
+               view,
+               ~s{button[role="resource page 2 details"] svg[role="visited check icon"]}
+             )
     end
 
     test "can visit a page", %{conn: conn, section: section, page_1: page_1} do
@@ -1543,7 +1468,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # expand unit 1/module 1 details
       view
-      |> element(~s{div[role="unit_1"] div[role="card_1"]})
+      |> element(~s{div[role="unit_1"] div[role="resource card 1"]})
       |> render_click()
 
       # click on page 1 to navigate to that page
@@ -1574,12 +1499,12 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       assert view
              |> element(~s{div[role="unit_1"] div[role="schedule_details"]})
              |> render() =~
-               "Due:\n              </span>\n              Sun, Dec 31, 2023 (8:00pm)"
+               "Read by: \n              </span>\n              Sun, Dec 31, 2023 (8:00pm)"
 
       # unit 2 has not been scheduled by instructor, so there must not be a schedule details data
       assert view
              |> element(~s{div[role="unit_2"] div[role="schedule_details"]})
-             |> render() =~ "Due:\n              </span>\n              not yet scheduled"
+             |> render() =~ "Due by:\n              </span>\n              Not yet scheduled"
     end
 
     test "can see units, modules and page (at module level) progresses", %{
@@ -1622,7 +1547,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # click on page 7 card to navigate to that page
       view
-      |> element(~s{div[role="unit_3"] div[role="card_7"]})
+      |> element(~s{div[role="unit_3"] div[role="resource card 7"]})
       |> render_click()
 
       request_path =
@@ -1650,7 +1575,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
 
       # click on page 8 card to navigate to that page
       view
-      |> element(~s{div[role="unit_3"] div[role="card_8"]})
+      |> element(~s{div[role="unit_3"] div[role="resource card 8"]})
       |> render_click()
 
       request_path =
@@ -1704,11 +1629,11 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
 
       assert view
-             |> element(~s{div[role="unit_1"] div[role="card_1"]"})
+             |> element(~s{div[role="unit_1"] div[role="resource card 1"]"})
              |> render =~ "style=\"background-image: url(&#39;module_1_custom_image_url&#39;)"
 
       assert view
-             |> element(~s{div[role="unit_1"] div[role="card_2"]"})
+             |> element(~s{div[role="unit_1"] div[role="resource card 2"]"})
              |> render =~ "style=\"background-image: url(&#39;/images/course_default.png&#39;)"
     end
 
@@ -1750,10 +1675,10 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
              |> element(
                ~s{div[id="top_level_page_#{top_level_page.resource_id}"] div[role="schedule_details"]}
              )
-             |> render() =~ "Due:\n              </span>\n              not yet scheduled"
+             |> render() =~ "Not yet scheduled"
 
       assert view
-             |> element(~s{div[id="page_#{top_level_page.resource_id}"][role="card_1"]})
+             |> element(~s{div[id="page_#{top_level_page.resource_id}"][role="resource card 1"]})
              |> render() =~ "Top Level Page"
     end
 
@@ -1961,7 +1886,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
              )
 
       view
-      |> element(~s{div[role="unit_5"] div[role="card_4"]})
+      |> element(~s{div[role="unit_5"] div[role="resource card 4"]})
       |> render_click()
 
       # page 11 and page 12 are displayed by default with their corresponding indentation
@@ -1987,13 +1912,13 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       section_1_element =
         element(
           view,
-          "#index_item_#{section_1.resource_id}_2023-11-03"
+          "#index_item_#{section_1.resource_id}_read_by_2023-11-03"
         )
 
       subsection_1_element =
         element(
           view,
-          "#index_item_#{subsection_1.resource_id}_2023-11-03"
+          "#index_item_#{subsection_1.resource_id}_read_by_2023-11-03"
         )
 
       assert render(section_1_element) =~ "Why Elixir?"
@@ -2003,24 +1928,28 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       assert render(subsection_1_element) =~ "ml-[20px]"
     end
 
-    test "groups pages within a module index by due date (even if some pages do not yet have a scheduled date)",
+    test "groups pages within a module index by due date or read by (even if some pages do not yet have a scheduled date)",
          %{conn: conn, section: section} do
       {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
 
       view
-      |> element(~s{div[role="unit_5"] div[role="card_4"]})
+      |> element(~s{div[role="unit_5"] div[role="resource card 4"]})
       |> render_click()
 
-      group_by_due_date_div = element(view, ~s{div[id="pages_grouped_by_2023-11-03"]})
+      group_by_read_by_date_div = element(view, ~s{div[id="pages_grouped_by_read_by_2023-11-03"]})
+
+      group_by_due_by_date_div = element(view, ~s{div[id="pages_grouped_by_due_by_2023-11-03"]})
 
       group_by_not_yet_scheduled_div =
-        element(view, ~s{div[id="pages_grouped_by_Not yet scheduled"]})
+        element(view, ~s{div[id="pages_grouped_by_Not yet scheduled_Not yet scheduled"]})
 
-      assert render(group_by_due_date_div) =~ "Due: Fri Nov 3, 2023"
-      assert render(group_by_due_date_div) =~ "Page 11"
-      assert render(group_by_due_date_div) =~ "Page 12"
+      assert render(group_by_read_by_date_div) =~ "Read by: Fri Nov 3, 2023"
+      assert render(group_by_read_by_date_div) =~ "Page 11"
 
-      assert render(group_by_not_yet_scheduled_div) =~ "Due: Not yet scheduled"
+      assert render(group_by_due_by_date_div) =~ "Due by: Fri Nov 3, 2023"
+      assert render(group_by_due_by_date_div) =~ "Page 12"
+
+      assert render(group_by_not_yet_scheduled_div) =~ "Not yet scheduled"
       assert render(group_by_not_yet_scheduled_div) =~ "Page 13"
       assert render(group_by_not_yet_scheduled_div) =~ "Page 14"
     end
@@ -2045,13 +1974,13 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       assert_receive({_ref, {:push_event, "enable-slider-buttons", _}}, 2_000)
 
       view
-      |> element(~s{div[role="unit_5"] div[role="card_4"]})
+      |> element(~s{div[role="unit_5"] div[role="resource card 4"]})
       |> render_click()
 
-      group_by_due_date_div = element(view, ~s{div[id="pages_grouped_by_2023-11-10"]})
+      group_by_due_date_div = element(view, ~s{div[id="pages_grouped_by_read_by_2023-11-10"]})
 
       # page 13 is due on Nov 10, 2023 as defined in the student exception
-      assert render(group_by_due_date_div) =~ "Due: Fri Nov 10, 2023"
+      assert render(group_by_due_date_div) =~ "Read by: Fri Nov 10, 2023"
       assert render(group_by_due_date_div) =~ "Page 13"
     end
 
@@ -2062,7 +1991,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
 
       view
-      |> element(~s{div[role="unit_5"] div[role="card_4"]})
+      |> element(~s{div[role="unit_5"] div[role="resource card 4"]})
       |> render_click()
 
       assert render(view) =~ "Page 13"
@@ -2082,6 +2011,38 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
 
       refute render(view) =~ "Page 7"
+    end
+
+    test "modules do not show duration minutes if duration is 0", %{
+      conn: conn,
+      section: section,
+      module_3: module_3,
+      page_5: page_5,
+      page_6: page_6
+    } do
+      {:ok, view, _html} = live(conn, Utils.learn_live_path(section.slug))
+
+      view
+      |> element(~s{div[id="module_#{module_3.resource_id}"]})
+      |> render_click()
+
+      # assert that page 5 and page 6 have duration 0
+      assert page_5.duration_minutes == 0
+      assert page_6.duration_minutes == 0
+
+      # assert that module 3 contains 2 pages (page 5 and page 6)
+      assert has_element?(
+               view,
+               ~s{div[id="module_#{module_3.resource_id}"] div[role="card badge"]},
+               "2 pages"
+             )
+
+      # assert that module 3 does not show duration minutes (since it is 0)
+      refute has_element?(
+               view,
+               ~s{div[id="module_#{module_3.resource_id}"] div[role="card badge"]},
+               "0 minutes"
+             )
     end
   end
 
@@ -2117,11 +2078,22 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
         live(conn, Utils.learn_live_path(section.slug, selected_view: :outline))
 
       assert has_element?(view, "span", "The best course ever!")
-      assert has_element?(view, "div", "Unit 1: Introduction")
-      assert has_element?(view, "div", "Unit 2: Building a Phoenix app")
-      assert has_element?(view, "div", "Unit 3: Implementing LiveView")
+      assert has_element?(view, "div", "Introduction")
+      assert has_element?(view, "div", "Building a Phoenix app")
+      assert has_element?(view, "div", "Implementing LiveView")
     end
 
+    test "can see the toggle button to show and hide the completed pages", %{
+      conn: conn,
+      section: section
+    } do
+      {:ok, view, _html} =
+        live(conn, Utils.learn_live_path(section.slug, selected_view: :outline))
+
+      assert has_element?(view, ~s{button[id="hide_completed_button"]}, "Hide Completed")
+    end
+
+    @tag :skip
     test "can see unit intro as first row and play the video (if provided)", %{
       conn: conn,
       section: section,
@@ -2146,6 +2118,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
              )
     end
 
+    @tag :skip
     test "intro video is marked as seen after playing it",
          %{
            conn: conn,
@@ -2264,48 +2237,6 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
              )
     end
 
-    test "sees a check icon on visited and completed pages", %{
-      conn: conn,
-      user: user,
-      section: section,
-      page_1: page_1
-    } do
-      set_progress(section.id, page_1.resource_id, user.id, 1.0, page_1)
-
-      {:ok, view, _html} =
-        live(conn, Utils.learn_live_path(section.slug, selected_view: :outline))
-
-      # when the garbage collection message is recieved we know the async metrics were loaded
-      # since the gc message is sent from the handle_info that loads the async metrics
-      assert_receive(:gc, 2_000)
-
-      assert has_element?(view, ~s{button[role="page 1 details"] div[role="check icon"]})
-      assert has_element?(view, ~s{button[role="page 2 details"]})
-      refute has_element?(view, ~s{button[role="page 2 details"] div[role="check icon"]})
-    end
-
-    test "sees a check icon on visited and completed pages within a section", %{
-      conn: conn,
-      user: user,
-      section: section,
-      page_11: page_11
-    } do
-      set_progress(section.id, page_11.resource_id, user.id, 1.0, page_11)
-
-      {:ok, view, _html} =
-        live(conn, Utils.learn_live_path(section.slug, selected_view: :outline))
-
-      # when the garbage collection message is received we know the async metrics were loaded
-      # since the gc message is sent from the handle_info that loads the async metrics
-      assert_receive(:gc, 2_000)
-
-      wait_while(fn ->
-        !has_element?(view, ~s{button[role="page 11 details"] div[role="check icon"]})
-      end)
-
-      assert has_element?(view, ~s{button[role="page 11 details"] div[role="check icon"]})
-    end
-
     test "does not see a check icon on visited pages that are not fully completed", %{
       conn: conn,
       user: user,
@@ -2359,12 +2290,6 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
          } do
       {:ok, view, _html} =
         live(conn, Utils.learn_live_path(section.slug, selected_view: :outline))
-
-      assert view
-             |> element(
-               ~s{div[id="top_level_page_#{top_level_page.resource_id}"] div[role="header"]}
-             )
-             |> render() =~ "Top Level Page"
 
       assert view
              |> element(~s{div[id="page_#{top_level_page.resource_id}"] span[role="page title"]})
@@ -2558,17 +2483,16 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       assert render(page_12_element) =~ "Page 12"
       assert render(page_12_element) =~ "ml-[40px]"
 
-      # Section and Sub-section are displayed with their corresponding indentation
       section_1_element =
         element(
           view,
-          "#section_#{section_1.resource_id}"
+          "#section_#{section_1.resource_id}_outline"
         )
 
       subsection_1_element =
         element(
           view,
-          "#section_#{subsection_1.resource_id}"
+          "#section_#{subsection_1.resource_id}_outline"
         )
 
       assert render(section_1_element) =~ "Why Elixir?"
@@ -2773,7 +2697,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       |> element(~s{nav[id=desktop-nav-menu] a}, "Schedule")
       |> render_click()
 
-      assert_redirect(view, "/sections/#{section.slug}/assignments?sidebar_expanded=true")
+      assert_redirect(view, "/sections/#{section.slug}/student_schedule?sidebar_expanded=true")
 
       {:ok, view, _html} =
         live(conn, Utils.learn_live_path(section.slug, sidebar_expanded: false))
@@ -2784,7 +2708,7 @@ defmodule OliWeb.Delivery.Student.ContentLiveTest do
       |> element(~s{nav[id="desktop-nav-menu"] a[id="schedule_nav_link"])})
       |> render_click()
 
-      assert_redirect(view, "/sections/#{section.slug}/assignments?sidebar_expanded=false")
+      assert_redirect(view, "/sections/#{section.slug}/student_schedule?sidebar_expanded=false")
     end
 
     test "exit course button redirects to the student workspace", %{

@@ -11,7 +11,6 @@ defmodule Oli.Delivery.Attempts.Core do
   alias Oli.Publishing.PublishedResource
   alias Oli.Resources.Revision
   alias Oli.Delivery.Sections.SectionsProjectsPublications
-  alias Oli.Delivery.Snapshots.Snapshot
   alias Oli.Accounts.User
 
   alias Oli.Delivery.Attempts.Core.{
@@ -30,6 +29,20 @@ defmodule Oli.Delivery.Attempts.Core do
         on: access.user_id == user.id,
         select: user,
         where: access.id == ^resource_access_id
+      )
+
+    Repo.one(query)
+  end
+
+  def get_user_from_attempt_guid(attempt_guid) do
+    query =
+      from(access in ResourceAccess,
+        join: attempt in ResourceAttempt,
+        on: access.id == attempt.resource_access_id,
+        join: user in User,
+        on: access.user_id == user.id,
+        select: user,
+        where: attempt.attempt_guid == ^attempt_guid
       )
 
     Repo.one(query)
@@ -418,119 +431,6 @@ defmodule Oli.Delivery.Attempts.Core do
     )
   end
 
-  @doc """
-  For a given project id, this retrieves part attempts and user information, for those part attempts
-  that are evaluated and that have snapshots defined. This is a key query for powering analytics
-  (mainly DataShop export), and thus is the reasoning why it is snapshot driven.
-
-  This impl is optimized so that it can be used even in very large datasets, where there might be
-  thousands or tens of thousands of part attempts.  One single massive query that attempted to
-  preload the activity attempt, the revision of the activity, the resource attempt and the
-  revision of the resource via a series of 'joins' would have an unnecessarily large payload due to the fact
-  that many attempts and certainly most revisions would be duplicates.   This approach here
-  makes a series of db requests, fetching the unique set of attempts and revisions necesarry to
-  then 'reconstruct' the preloaded attempt hierarchies.
-  """
-  def get_part_attempts_and_users(project_id) do
-    # This is our base, reusable query designed to get the part attempts
-    core =
-      from(snapshot in Snapshot,
-        as: :snapshot,
-        join: part_attempt in PartAttempt,
-        as: :part_attempt,
-        on: snapshot.part_attempt_id == part_attempt.id,
-        where:
-          snapshot.project_id == ^project_id and
-            part_attempt.lifecycle_state == :evaluated
-      )
-
-    # Now get the resource attempt revision for those part attempts, distinctly, and
-    # create a map of their ids to the attempts
-    resource_attempt_revisions =
-      from([part_attempt: part_attempt] in core,
-        join: a in ActivityAttempt,
-        on: part_attempt.activity_attempt_id == a.id,
-        join: ra in ResourceAttempt,
-        on: a.resource_attempt_id == ra.id,
-        join: r in Revision,
-        on: ra.revision_id == r.id,
-        distinct: true,
-        select: r
-      )
-      |> Repo.all()
-      |> Enum.reduce(%{}, fn r, m -> Map.put(m, r.id, r) end)
-
-    # Now get the resource attempts themselves, distincly, and create a map, while
-    # wiring into them the resource revisions fetched above
-    resource_attempts =
-      from([part_attempt: part_attempt] in core,
-        join: a in ActivityAttempt,
-        on: part_attempt.activity_attempt_id == a.id,
-        join: ra in ResourceAttempt,
-        on: a.resource_attempt_id == ra.id,
-        distinct: true,
-        select: ra
-      )
-      |> Repo.all()
-      |> Enum.reduce(%{}, fn r, m ->
-        # wire in the resource attempt revision, to simulate the preload
-        r = Map.put(r, :revision, Map.get(resource_attempt_revisions, r.revision_id))
-        Map.put(m, r.id, r)
-      end)
-
-    # Get the activity attempt revisions, distinctly.  Getting them distinctly is a potentially
-    # huge optimization if we imagine a course where there might only be ten activities, but that
-    # are taken 10,000 times by students.
-    activity_attempt_revisions =
-      from([part_attempt: part_attempt] in core,
-        join: a in ActivityAttempt,
-        on: part_attempt.activity_attempt_id == a.id,
-        join: r in Revision,
-        on: a.revision_id == r.id,
-        distinct: true,
-        select: r
-      )
-      |> Repo.all()
-      |> Enum.reduce(%{}, fn r, m -> Map.put(m, r.id, r) end)
-
-    # Get the attempts, and wire in the activity revision and the resource attempt
-    activity_attempts =
-      from([part_attempt: part_attempt] in core,
-        join: a in ActivityAttempt,
-        on: part_attempt.activity_attempt_id == a.id,
-        distinct: true,
-        select: a
-      )
-      |> Repo.all()
-      |> Enum.reduce(%{}, fn r, m ->
-        r =
-          Map.put(r, :resource_attempt, Map.get(resource_attempts, r.resource_attempt_id))
-          |> Map.put(:revision, Map.get(activity_attempt_revisions, r.revision_id))
-
-        Map.put(m, r.id, r)
-      end)
-
-    # Now get the part attempts with user
-    from([snapshot: s, part_attempt: part_attempt] in core,
-      join: user in User,
-      on: s.user_id == user.id,
-      select: %{part_attempt: part_attempt, user: user}
-    )
-    |> Repo.all()
-    |> Enum.map(fn %{user: user, part_attempt: part_attempt} ->
-      # Wire in the activity attempt to each part attempt
-      %{
-        user: user,
-        part_attempt:
-          Map.put(
-            part_attempt,
-            :activity_attempt,
-            Map.get(activity_attempts, part_attempt.activity_attempt_id)
-          )
-      }
-    end)
-  end
-
   def has_any_active_attempts?(resource_attempts) do
     Enum.any?(resource_attempts, fn r -> r.lifecycle_state == :active end)
   end
@@ -758,6 +658,93 @@ defmodule Oli.Delivery.Attempts.Core do
       )
 
     {:ok, results}
+  end
+
+  @doc """
+  Returns a list of activity attempts for a given section and activity resource ids.
+  """
+  @spec get_activity_attempts_by(integer(), [integer()]) :: [map()]
+  def get_activity_attempts_by(section_id, activity_resource_ids) do
+    from(activity_attempt in ActivityAttempt,
+      left_join: resource_attempt in assoc(activity_attempt, :resource_attempt),
+      left_join: resource_access in assoc(resource_attempt, :resource_access),
+      left_join: user in assoc(resource_access, :user),
+      left_join: activity_revision in assoc(activity_attempt, :revision),
+      left_join: resource_revision in assoc(resource_attempt, :revision),
+      where:
+        resource_access.section_id == ^section_id and
+          activity_revision.resource_id in ^activity_resource_ids,
+      select: activity_attempt,
+      select_merge: %{
+        activity_type_id: activity_revision.activity_type_id,
+        activity_title: activity_revision.title,
+        page_title: resource_revision.title,
+        page_id: resource_revision.resource_id,
+        resource_attempt_number: resource_attempt.attempt_number,
+        graded: resource_revision.graded,
+        user: user,
+        revision: activity_revision,
+        resource_attempt_guid: resource_attempt.attempt_guid,
+        resource_access_id: resource_access.id
+      }
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Fetches the activities for a given assessment and section attempted by a list of students
+
+  ## Parameters
+    * `assessment_resource_id` - the resource id of the assessment
+    * `section_id` - the section id
+    * `student_ids` - the list of student ids
+    * `filter_by_survey` - an optional boolean flag to filter by survey activities
+
+  iex> get_activities(1, 2, [3, 4], false)
+  [
+    %{
+      id: 1,
+      resource_id: 1,
+      title: "Activity 1"
+    },
+    %{
+      id: 2,
+      resource_id: 2,
+      title: "Activity 2"
+    }
+  ]
+  """
+  @spec get_evaluated_activities_for(integer(), integer(), [integer()], boolean()) :: [map()]
+  def get_evaluated_activities_for(
+        assessment_resource_id,
+        section_id,
+        student_ids,
+        filter_by_survey \\ false
+      ) do
+    filter_by_survey? =
+      if filter_by_survey do
+        dynamic([aa, _], not is_nil(aa.survey_id))
+      else
+        dynamic([aa, _], is_nil(aa.survey_id))
+      end
+
+    from(aa in ActivityAttempt,
+      join: res_attempt in ResourceAttempt,
+      on: aa.resource_attempt_id == res_attempt.id,
+      where: aa.lifecycle_state == :evaluated,
+      join: res_access in ResourceAccess,
+      on: res_attempt.resource_access_id == res_access.id,
+      where:
+        res_access.section_id == ^section_id and
+          res_access.resource_id == ^assessment_resource_id and
+          res_access.user_id in ^student_ids,
+      where: ^filter_by_survey?,
+      join: rev in Revision,
+      on: aa.revision_id == rev.id,
+      group_by: [rev.resource_id, rev.id],
+      select: map(rev, [:id, :resource_id, :title])
+    )
+    |> Repo.all()
   end
 
   def get_all_activity_attempts(resource_attempt_id) do
@@ -1018,5 +1005,21 @@ defmodule Oli.Delivery.Attempts.Core do
         where: res_acc.section_id == ^target_section_id and res_acc.user_id == ^target_user_id
       )
     )
+  end
+
+  @doc """
+  Counts the number of attempts made by a list of students for a given activity in a given section.
+  """
+  @spec count_student_attempts(integer(), %Section{}, [integer()]) :: integer() | nil
+  def count_student_attempts(activity_resource_id, section_id, student_ids) do
+    from(ra in ResourceAttempt,
+      join: access in ResourceAccess,
+      on: access.id == ra.resource_access_id,
+      where:
+        ra.lifecycle_state == :evaluated and access.section_id == ^section_id and
+          access.resource_id == ^activity_resource_id and access.user_id in ^student_ids,
+      select: count(ra.id)
+    )
+    |> Repo.one()
   end
 end

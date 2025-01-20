@@ -1,17 +1,22 @@
-import React, { Fragment, useCallback, useState } from 'react';
+import React, { Fragment, useCallback, useEffect, useState } from 'react';
 import { ListGroup, Overlay, OverlayTrigger, Popover, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   selectCopiedPart,
+  selectCopiedPartActivityId,
   selectPartComponentTypes,
   selectPaths,
   setCopiedPart,
   setRightPanelActiveTab,
 } from 'apps/authoring/store/app/slice';
 import { addPart } from 'apps/authoring/store/parts/actions/addPart';
-import { setCurrentSelection } from 'apps/authoring/store/parts/slice';
+import {
+  selectCurrentPartPropertyFocus,
+  setCurrentSelection,
+} from 'apps/authoring/store/parts/slice';
 import {
   selectCurrentActivityTree,
+  selectCurrentSequenceId,
   selectSequence,
 } from 'apps/delivery/store/features/groups/selectors/deck';
 import { useKeyDown } from 'hooks/useKeyDown';
@@ -46,18 +51,23 @@ const AddComponentToolbar: React.FC<{
 
   const [showPartsMenu, setShowPartsMenu] = useState(false);
   const [partsMenuTarget, setPartsMenuTarget] = useState(null);
-
   const availablePartComponents = useSelector(selectPartComponentTypes);
+  const copiedPartActivityId = useSelector(selectCopiedPartActivityId);
   const currentActivityTree = useSelector(selectCurrentActivityTree);
   const currentSequence = useSelector(selectSequence);
+  const currentSequenceId = useSelector(selectCurrentSequenceId);
   const copiedPart = useSelector(selectCopiedPart);
-
+  const [newPartAddOffset, setNewPartAddOffset] = useState<number>(0);
   const addPartToCurrentScreen = (newPartData: any) => {
     if (currentActivityTree) {
       const [currentActivity] = currentActivityTree.slice(-1);
       dispatch(addPart({ activityId: currentActivity.id, newPartData }));
     }
   };
+  const _currentPartPropertyFocus = useSelector(selectCurrentPartPropertyFocus);
+  useEffect(() => {
+    setNewPartAddOffset(0);
+  }, [currentSequenceId]);
 
   const handleAddComponent = useCallback(
     (partComponentType: string) => {
@@ -74,18 +84,20 @@ const AddComponentToolbar: React.FC<{
       }
       const PartClass = customElements.get(partComponent.authoring_element);
       if (PartClass) {
-        // only ever add to the current activity, not a layer
-
+        const defaultNewPartWidth = 100;
+        const defaultNewPartHeight = 100;
+        // only ever add to the current  activity, not a layer
+        setNewPartAddOffset(newPartAddOffset + 1);
         const part = new PartClass() as any;
         const newPartData = {
           id: `${partComponentType}-${guid()}`,
           type: partComponent.delivery_element,
           custom: {
-            x: 10,
-            y: 10,
+            x: 10 * newPartAddOffset, // when new components are added, offset the location placed by 10 px
+            y: 10 * newPartAddOffset, // when new components are added, offset the location placed by 10 px
             z: 0,
-            width: 100,
-            height: 100,
+            width: defaultNewPartWidth,
+            height: defaultNewPartHeight,
           },
         };
         const creationContext = { transform: { ...newPartData.custom } };
@@ -95,7 +107,7 @@ const AddComponentToolbar: React.FC<{
         addPartToCurrentScreen(newPartData);
       }
     },
-    [availablePartComponents, currentActivityTree, currentSequence],
+    [availablePartComponents, currentActivityTree, currentSequence, newPartAddOffset],
   );
 
   const handlePartMenuButtonClick = (event: any) => {
@@ -103,11 +115,28 @@ const AddComponentToolbar: React.FC<{
     setPartsMenuTarget(event.target);
   };
   const handlePartPasteClick = () => {
-    const newPartData = {
+    //When a part is pasted, offset the new part component by 20px from the original part
+    const pasteOffset = 20;
+    let newPartData = {
       id: `${copiedPart.type}-${guid()}`,
       type: copiedPart.type,
       custom: copiedPart.custom,
     };
+    if (currentActivityTree) {
+      const [currentActivity] = currentActivityTree.slice(-1);
+      console.log({ copiedPartActivityId, currentActivityId: currentActivity.id });
+      if (copiedPartActivityId === currentActivity.id) {
+        newPartData = {
+          id: `${copiedPart.type}-${guid()}`,
+          type: copiedPart.type,
+          custom: {
+            ...copiedPart.custom,
+            x: copiedPart.custom.x + pasteOffset,
+            y: copiedPart.custom.y + pasteOffset,
+          },
+        };
+      }
+    }
     addPartToCurrentScreen(newPartData);
     dispatch(setCurrentSelection({ selection: newPartData.id }));
 
@@ -117,13 +146,13 @@ const AddComponentToolbar: React.FC<{
 
   useKeyDown(
     () => {
-      if (copiedPart) {
+      if (copiedPart && _currentPartPropertyFocus) {
         handlePartPasteClick();
       }
     },
     ['KeyV'],
     { ctrlKey: true },
-    [copiedPart, currentActivityTree],
+    [copiedPart, currentActivityTree, _currentPartPropertyFocus],
   );
 
   return (

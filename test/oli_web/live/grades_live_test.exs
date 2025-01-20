@@ -64,7 +64,7 @@ defmodule OliWeb.GradesLiveTest do
       section: %Section{slug: section_slug}
     } do
       redirect_path =
-        "/session/new?request_path=%2Fsections%2F#{section_slug}%2Fgrades%2Flms&section=#{section_slug}"
+        "/users/log_in"
 
       {:error, {:redirect, %{to: ^redirect_path}}} =
         live(conn, live_view_grades_route(section_slug))
@@ -79,7 +79,7 @@ defmodule OliWeb.GradesLiveTest do
       section: %Section{slug: section_slug}
     } do
       redirect_path =
-        "/session/new?request_path=%2Fsections%2F#{section_slug}%2Fgrades%2Flms&section=#{section_slug}"
+        "/users/log_in"
 
       {:error, {:redirect, %{to: ^redirect_path}}} =
         live(conn, live_view_grades_route(section_slug))
@@ -271,6 +271,30 @@ defmodule OliWeb.GradesLiveTest do
       |> render_click()
 
       assert has_element?(view, "p", "Pending grade updates: 1")
+
+      # Button disabled until it is finished
+      assert view
+             |> has_element?(
+               "a[phx-click=\"send_grades\"][disabled]",
+               "Synchronize Grades"
+             )
+
+      payload = %Oli.Delivery.Attempts.PageLifecycle.GradeUpdatePayload{
+        resource_access_id: resource_access.id,
+        job: %{id: 1},
+        status: :success,
+        details: nil
+      }
+
+      # Send success grade update message
+      send(view.pid, {:lms_grade_update_result, payload})
+
+      # Button is enabled again once the sync is finished
+      refute view
+             |> has_element?(
+               "a[phx-click=\"send_grades\"][disabled]",
+               "Synchronize Grades"
+             )
     end
 
     test "sync grades - select other resource", %{
@@ -455,26 +479,6 @@ defmodule OliWeb.GradesLiveTest do
       |> render_click()
 
       assert has_element?(view, "div#flash", "Error getting LMS access token")
-    end
-
-    test "sync grades - shows error on failure to obtain access token",
-         %{
-           conn: conn,
-           section: section
-         } do
-      user = insert(:user)
-      enroll_user_to_section(user, section, :context_learner)
-
-      {:ok, view, _html} = live(conn, live_view_grades_route(section.slug))
-
-      view
-      |> element(
-        "a[phx-click=\"send_grades\"]",
-        "Synchronize Grades"
-      )
-      |> render_click()
-
-      assert has_element?(view, "div#flash", "error fetching access token")
     end
   end
 end

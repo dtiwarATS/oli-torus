@@ -1,5 +1,6 @@
 defmodule Oli.Delivery.Settings.Combined do
   defstruct resource_id: nil,
+            scheduling_type: :read_by,
             start_date: nil,
             end_date: nil,
             max_attempts: 0,
@@ -15,10 +16,12 @@ defmodule Oli.Delivery.Settings.Combined do
             feedback_mode: :allow,
             feedback_scheduled_date: nil,
             collab_space_config: nil,
-            explanation_strategy: nil
+            explanation_strategy: nil,
+            allow_hints: false
 
   @type t() :: %__MODULE__{
           resource_id: integer(),
+          scheduling_type: :due_by | :read_by | :inclass_activity,
           start_date: DateTime.t(),
           end_date: DateTime.t(),
           max_attempts: integer(),
@@ -33,7 +36,8 @@ defmodule Oli.Delivery.Settings.Combined do
           review_submission: :allow | :disallow,
           feedback_mode: :allow | :disallow | :scheduled,
           feedback_scheduled_date: DateTime.t(),
-          collab_space_config: Oli.Resources.Collaboration.CollabSpaceConfig.t(),
-          explanation_strategy: Oli.Resources.ExplanationStrategy.t()
+          collab_space_config: %Oli.Resources.Collaboration.CollabSpaceConfig{},
+          explanation_strategy: %Oli.Resources.ExplanationStrategy{},
+          allow_hints: boolean()
         }
 end

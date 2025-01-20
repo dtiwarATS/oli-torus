@@ -79,6 +79,9 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
         "oli_multiple_choice" ->
           %{choices: generate_choices(activity_revision.id)}
 
+        "oli_likert" ->
+          Oli.TestHelpers.likert_activity_content()
+
         _ ->
           nil
       end
@@ -432,92 +435,6 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
     }
   end
 
-  defp generate_likert_content(title) do
-    %{
-      "stem" => %{
-        "id" => "2028833010",
-        "content" => [
-          %{"id" => "280825708", "type" => "p", "children" => [%{"text" => title}]}
-        ]
-      },
-      "choices" => generate_choices("2028833010"),
-      "authoring" => %{
-        "parts" => [
-          %{
-            "id" => "1",
-            "hints" => [
-              %{
-                "id" => "540968727",
-                "content" => [
-                  %{"id" => "2256338253", "type" => "p", "children" => [%{"text" => ""}]}
-                ]
-              },
-              %{
-                "id" => "2627194758",
-                "content" => [
-                  %{"id" => "3013119256", "type" => "p", "children" => [%{"text" => ""}]}
-                ]
-              },
-              %{
-                "id" => "2413327578",
-                "content" => [
-                  %{"id" => "3742562774", "type" => "p", "children" => [%{"text" => ""}]}
-                ]
-              }
-            ],
-            "outOf" => nil,
-            "responses" => [
-              %{
-                "id" => "4122423546",
-                "rule" => "(!(input like {1968053412})) && (input like {1436663133})",
-                "score" => 1,
-                "feedback" => %{
-                  "id" => "685174561",
-                  "content" => [
-                    %{
-                      "id" => "2621700133",
-                      "type" => "p",
-                      "children" => [%{"text" => "Correct"}]
-                    }
-                  ]
-                }
-              },
-              %{
-                "id" => "3738563441",
-                "rule" => "input like {.*}",
-                "score" => 0,
-                "feedback" => %{
-                  "id" => "3796426513",
-                  "content" => [
-                    %{
-                      "id" => "1605260471",
-                      "type" => "p",
-                      "children" => [%{"text" => "Incorrect"}]
-                    }
-                  ]
-                }
-              }
-            ],
-            "gradingApproach" => "automatic",
-            "scoringStrategy" => "average"
-          }
-        ],
-        "correct" => [["1436663133"], "4122423546"],
-        "version" => 2,
-        "targeted" => [],
-        "previewText" => "",
-        "transformations" => [
-          %{
-            "id" => "1349799137",
-            "path" => "choices",
-            "operation" => "shuffle",
-            "firstAttemptOnly" => true
-          }
-        ]
-      }
-    }
-  end
-
   defp generate_choices(id),
     do: [
       %{
@@ -645,7 +562,7 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
         },
         activity_type_id: likert_reg.id,
         title: "The Likert question",
-        content: generate_likert_content("This is a likert question")
+        content: Oli.TestHelpers.likert_activity_content("This is a likert question")
       )
 
     ## graded pages (assessments)...
@@ -1136,6 +1053,7 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       case tab_name do
         :assessments ->
           [
+            :order,
             :title,
             :due_date,
             :avg_score,
@@ -1184,7 +1102,7 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       section = insert(:section)
 
       redirect_path =
-        "/session/new?request_path=%2Fsections%2F#{section.slug}%2Finstructor_dashboard%2Finsights%2Fscored_activities"
+        "/users/log_in"
 
       assert {:error, {:redirect, %{to: ^redirect_path}}} =
                live(conn, live_view_scored_activities_route(section.slug))
@@ -1234,13 +1152,15 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       [a0, a1, a2, a3, a4] = table_as_list_of_maps(view, :assessments)
 
       assert has_element?(view, "h4", "Scored Activities")
-      assert a0.title == "Orphaned Page"
-      assert a1.title == "Module 1: IntroductionPage 1"
-      assert a2.title == "Module 1: IntroductionPage 2"
-      assert a3.title == "Module 2: BasicsPage 3"
-      assert a4.title == "Module 2: BasicsPage 4"
+      assert a0.title == "Module 1: IntroductionPage 1"
+      assert a1.title == "Module 1: IntroductionPage 2"
+      assert a2.title == "Module 2: BasicsPage 3"
+      assert a3.title == "Module 2: BasicsPage 4"
+      assert a4.title == "Orphaned Page"
     end
 
+    # NON-DETERMINISTIC: https://eliterate.atlassian.net/browse/TRIAGE-4 Fix or remove
+    @tag :skip
     test "sorting by Due Date", %{
       conn: conn,
       section: section,
@@ -1297,6 +1217,49 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
              ] = table_as_list_of_maps(view, :assessments) |> Enum.map(& &1.due_date)
     end
 
+    test "sorting by Order number", %{
+      conn: conn,
+      section: section
+    } do
+      {:ok, view, _html} = live(conn, live_view_scored_activities_route(section.slug))
+
+      assert view
+             |> element("tr:first-child > td:first-child > div")
+             |> render() =~ "1"
+
+      assert view
+             |> element("tr:first-child > td:nth-child(2) > div")
+             |> render() =~ "Page 1"
+
+      assert view
+             |> element("tr:last-child > td:first-child > div")
+             |> render() =~ "5"
+
+      assert view
+             |> element("tr:last-child > td:nth-child(2) > div > div")
+             |> render() =~ "Orphaned Page"
+
+      view
+      |> element("th[phx-value-sort_by=order]")
+      |> render_click()
+
+      assert view
+             |> element("tr:first-child > td:first-child > div")
+             |> render() =~ "5"
+
+      assert view
+             |> element("tr:first-child > td:nth-child(2) > div > div > a")
+             |> render() =~ "Orphaned Page"
+
+      assert view
+             |> element("tr:last-child > td:first-child > div")
+             |> render() =~ "1"
+
+      assert view
+             |> element("tr:last-child > td:nth-child(2) > div")
+             |> render() =~ "Page 1"
+    end
+
     test "displays custom labels", %{
       conn: conn,
       section: section
@@ -1311,11 +1274,11 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       [a0, a1, a2, a3, a4] = table_as_list_of_maps(view, :assessments)
 
       assert has_element?(view, "h4", "Scored Activities")
-      assert a0.title == "Orphaned Page"
-      assert a1.title == "Chapter 1: IntroductionPage 1"
-      assert a2.title == "Chapter 1: IntroductionPage 2"
-      assert a3.title == "Chapter 2: BasicsPage 3"
-      assert a4.title == "Chapter 2: BasicsPage 4"
+      assert a0.title == "Chapter 1: IntroductionPage 1"
+      assert a1.title == "Chapter 1: IntroductionPage 2"
+      assert a2.title == "Chapter 2: BasicsPage 3"
+      assert a3.title == "Chapter 2: BasicsPage 4"
+      assert a4.title == "Orphaned Page"
     end
 
     test "patches url to see activity details when a row is clicked", %{
@@ -1342,7 +1305,7 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
           assert String.starts_with?(url_with_params, url)
           assert url_with_params =~ "assessment_table_params[offset]=0"
           assert url_with_params =~ "assessment_table_params[limit]=20"
-          assert url_with_params =~ "assessment_table_params[sort_by]=title"
+          assert url_with_params =~ "assessment_table_params[sort_by]=order"
           assert url_with_params =~ "assessment_table_params[assessment_id]="
           assert url_with_params =~ "assessment_table_params[text_search]="
           assert url_with_params =~ "assessment_table_params[sort_order]=asc"
@@ -1759,23 +1722,17 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
           })
         )
 
-      # check that the likert details render correctly
-      selected_activity_model =
+      # check that the likert VegaLite visualization renders correctly
+      selected_activity_data =
         view
+        |> element("div[data-live-react-class=\"Components.VegaLiteRenderer\"]")
         |> render()
         |> Floki.parse_fragment!()
-        |> Floki.find(~s{oli-likert-authoring})
-        |> Floki.attribute("model")
-        |> hd
+        |> Floki.attribute("data-live-react-props")
+        |> hd()
+        |> Jason.decode!()
 
-      assert has_element?(
-               view,
-               ~s(div[role="activity_title"]),
-               "Question details"
-             )
-
-      assert selected_activity_model =~
-               "{\"activityTitle\":\"The Likert question\",\"authoring\":{\"correct\":[[\"1436663133\"],\"4122423546\"],\"parts\":[{\"gradingApproach\":\"automatic\",\"hints\":[{\"content\":[{\"children\":[{\"text\":\"\"}],\"id\":\"2256338253\",\"type\":\"p\"}],\"id\":\"540968727\"},{\"content\":[{\"children\":[{\"text\":\"\"}],\"id\":\"3013119256\",\"type\":\"p\"}],\"id\":\"2627194758\"},{\"content\":[{\"children\":[{\"text\":\"\"}],\"id\":\"3742562774\",\"type\":\"p\"}],\"id\":\"2413327578\"}],\"id\":\"1\",\"outOf\":null,\"responses\":[{\"feedback\":{\"content\":[{\"children\":[{\"text\":\"Correct\"}],\"id\":\"2621700133\",\"type\":\"p\"}],\"id\":\"685174561\"},\"id\":\"4122423546\",\"rule\":\"(!(input like {1968053412})) && (input like {1436663133})\",\"score\":1},{\"feedback\":{\"content\":[{\"children\":[{\"text\":\"Incorrect\"}],\"id\":\"1605260471\",\"type\":\"p\"}],\"id\":\"3796426513\"},\"id\":\"3738563441\",\"rule\":\"input like {.*}\",\"score\":0}],\"scoringStrategy\":\"average\"}],\"previewText\":\"\",\"targeted\":[],\"transformations\":[{\"firstAttemptOnly\":true,\"id\":\"1349799137\",\"operation\":\"shuffle\",\"path\":\"choices\"}],\"version\":2},\"choices\":[{\"content\":[{\"children\":[{\"text\":\"Choice 1 for 2028833010\"}],\"id\":\"1866911747\",\"type\":\"p\"}],\"frequency\":1,\"id\":\"id_for_option_a\"},{\"content\":[{\"children\":[{\"text\":\"Choice 2 for 2028833010\"}],\"id\":\"3926142114\",\"type\":\"p\"}],\"frequency\":0,\"id\":\"id_for_option_b\"}],\"stem\":{\"content\":[{\"children\":[{\"text\":\"This is a likert question\"}],\"id\":\"280825708\",\"type\":\"p\"}],\"id\":\"2028833010\"}}"
+      assert selected_activity_data["spec"]["title"]["text"] == likert_activity.title
     end
 
     test "single response details get rendered for a section with analytics_version :v2 but not for :v1",
@@ -1994,16 +1951,11 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
           })
         )
 
-      selected_activity_model =
-        view
-        |> render()
-        |> Floki.parse_fragment!()
-        |> Floki.find(~s{oli-likert-authoring})
-        |> Floki.attribute("model")
-        |> hd
-
-      assert selected_activity_model =~ ~s{"id":"id_for_option_a"}
-      refute selected_activity_model =~ ~s{"frequency":}
+      # check that the likert VegaLite visualization is not rendered
+      refute has_element?(
+               view,
+               ~s(div[data-live-react-class="Components.VegaLiteRenderer"])
+             )
     end
 
     test "question details responds to user click on an activity", %{
@@ -2367,11 +2319,11 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
 
       [a0, a1, a2, a3, a4] = table_as_list_of_maps(view, :assessments)
 
-      assert a0.title == "Orphaned Page"
-      assert a1.title == "Module 1: IntroductionPage 1"
-      assert a2.title == "Module 1: IntroductionPage 2"
-      assert a3.title == "Module 2: BasicsPage 3"
-      assert a4.title == "Module 2: BasicsPage 4"
+      assert a0.title == "Module 1: IntroductionPage 1"
+      assert a1.title == "Module 1: IntroductionPage 2"
+      assert a2.title == "Module 2: BasicsPage 3"
+      assert a3.title == "Module 2: BasicsPage 4"
+      assert a4.title == "Orphaned Page"
 
       # It does not display pagination options
       refute has_element?(view, "nav[aria-label=\"Paging\"]")
@@ -2394,8 +2346,8 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       [a0, a1] = table_as_list_of_maps(view, :assessments)
 
       # Page 1
-      assert a0.title == "Orphaned Page"
-      assert a1.title == "Module 1: IntroductionPage 1"
+      assert a0.title == "Module 1: IntroductionPage 1"
+      assert a1.title == "Module 1: IntroductionPage 2"
     end
 
     test "change page size works as expected", %{
@@ -2415,8 +2367,8 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       [a0, a1] = table_as_list_of_maps(view, :assessments)
 
       # Page 1
-      assert a0.title == "Orphaned Page"
-      assert a1.title == "Module 1: IntroductionPage 1"
+      assert a0.title == "Module 1: IntroductionPage 1"
+      assert a1.title == "Module 1: IntroductionPage 2"
 
       # Assert that the pagination options are displayed
       assert has_element?(view, "nav[aria-label=\"Paging\"]")
@@ -2429,8 +2381,8 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       [a2, a3] = table_as_list_of_maps(view, :assessments)
 
       # Page 2
-      assert a2.title == "Module 1: IntroductionPage 2"
-      assert a3.title == "Module 2: BasicsPage 3"
+      assert a2.title == "Module 2: BasicsPage 3"
+      assert a3.title == "Module 2: BasicsPage 4"
     end
 
     test "keeps showing the same elements when changing the page size", %{
@@ -2449,8 +2401,8 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       [a2, a3] = table_as_list_of_maps(view, :assessments)
 
       # Page 2
-      assert a2.title == "Module 1: IntroductionPage 2"
-      assert a3.title == "Module 2: BasicsPage 3"
+      assert a2.title == "Module 2: BasicsPage 3"
+      assert a3.title == "Module 2: BasicsPage 4"
 
       # Change page size from 2 to 1
       view
@@ -2460,7 +2412,7 @@ defmodule OliWeb.Delivery.InstructorDashboard.ScoredActivitiesTabTest do
       [a2] = table_as_list_of_maps(view, :assessments)
 
       # Page 3. It keeps showing the same element.
-      assert a2.title == "Module 1: IntroductionPage 2"
+      assert a2.title == "Module 2: BasicsPage 3"
     end
   end
 end

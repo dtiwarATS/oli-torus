@@ -45,15 +45,7 @@ defmodule OliWeb.PageDeliveryController do
 
           if user_roles.is_instructor? do
             conn
-            |> redirect(
-              to:
-                Routes.live_path(
-                  OliWeb.Endpoint,
-                  OliWeb.Delivery.InstructorDashboard.InstructorDashboardLive,
-                  section_slug,
-                  :manage
-                )
-            )
+            |> redirect(to: ~p"/sections/#{section_slug}/manage")
           else
             revision = DeliveryResolver.root_container(section_slug)
 
@@ -738,7 +730,8 @@ defmodule OliWeb.PageDeliveryController do
         pageTitle: context.page.title,
         pageSlug: context.page.slug,
         graded: context.page.graded,
-        content: context.page.content,
+        content:
+          build_page_content(context.page.content, Plug.Conn.get_session(conn, :request_path)),
         resourceAttemptState: resource_attempt.state,
         resourceAttemptGuid: resource_attempt.attempt_guid,
         currentServerTime: DateTime.utc_now() |> to_epoch,
@@ -750,7 +743,7 @@ defmodule OliWeb.PageDeliveryController do
           |> to_epoch,
         lateSubmit: context.effective_settings.late_submit,
         activityGuidMapping: context.activities,
-        signoutUrl: Routes.session_path(OliWeb.Endpoint, :signout, type: :user),
+        signoutUrl: ~p"/users/log_out",
         previousPageURL: previous_url,
         nextPageURL: next_url,
         previewMode: preview_mode,
@@ -796,6 +789,15 @@ defmodule OliWeb.PageDeliveryController do
       title: context.page.title
     })
   end
+
+  _docp = """
+  In case there is a request path we add that path in the page content as 'backUrl'.
+  This backUrl aims to return the student to the page they were on
+  before they accessed the page we are building (i.e. the "Learn", "Home" or "Schedule" page)
+  """
+
+  defp build_page_content(content, request_path) when request_path in ["", nil], do: content
+  defp build_page_content(content, request_path), do: Map.put(content, "backUrl", request_path)
 
   defp to_epoch(nil), do: nil
 

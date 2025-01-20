@@ -324,7 +324,7 @@ defmodule Oli.Interop.Export do
         project_id: project.id,
         include_archived: false
       })
-      |> Repo.preload(section_project_publications: [:publication])
+      |> Repo.preload([:certificate, section_project_publications: [:publication]])
       |> Enum.filter(&(length(&1.section_project_publications) == 1))
 
     product_ids = products |> Enum.map(& &1.id)
@@ -450,6 +450,8 @@ defmodule Oli.Interop.Export do
 
     Enum.map(root.children, fn id -> full_hierarchy(revisions_by_resource_id, id) end)
 
+    certificate = Jason.encode!(product.certificate)
+
     %{
       type: "Product",
       id: Integer.to_string(product.id, 10),
@@ -457,6 +459,12 @@ defmodule Oli.Interop.Export do
       title: product.title,
       welcomeTitle: product.welcome_title,
       encouragingSubtitle: product.encouraging_subtitle,
+      requiresPayment: product.requires_payment,
+      paymentOptions: product.payment_options,
+      payByInstitution: product.pay_by_institution,
+      gracePeriodDays: product.grace_period_days,
+      amount: product.amount,
+      certificate: certificate,
       children: Enum.map(root.children, fn id -> full_hierarchy(revisions_by_resource_id, id) end)
     }
     |> entry("#{product.id}.json")
