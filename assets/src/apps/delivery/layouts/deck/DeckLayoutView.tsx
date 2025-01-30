@@ -250,12 +250,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     return () => {
       clearTimeout(timeout);
       sharedActivityPromise = null;
-      if (historyModeNavigation || reviewMode) {
-        console.log(
-          '[AllActivitiesInit] historyModeNavigation or reviewMode is ON, clearing sharedActivityInit',
-        );
-        //sharedActivityInit.clear();
-      }
     };
   }, [
     currentActivityTree,

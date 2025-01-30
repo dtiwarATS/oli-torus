@@ -504,10 +504,9 @@ export const getLocalizedStateSnapshot = (
   activityIds: EntityId[],
   env: Environment = defaultGlobalEnv,
 ) => {
-  const localActivityIds = activityIds;
   const snapshot = getEnvState(env);
   const finalState: any = { ...snapshot };
-  localActivityIds.forEach((activityId: string) => {
+  activityIds.forEach((activityId: string) => {
     const activityState = Object.keys(snapshot)
       .filter((key) => key.indexOf(`${activityId}|stage.`) === 0)
       .reduce((collect: any, key) => {
