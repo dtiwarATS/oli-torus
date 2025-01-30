@@ -197,7 +197,6 @@ const Adaptive = (props: DeliveryElementProps<AdaptiveModelSchema>) => {
           });
           partInitResponseMap.clear();
         } else {
-          let currentActivityId = activityId;
           const response: any = Array.from(partInitResponseMap);
           if (props.onReady) {
             const readyResults: any = await props.onReady(
@@ -213,11 +212,7 @@ const Adaptive = (props: DeliveryElementProps<AdaptiveModelSchema>) => {
             // has half of its screen data scaved in old approach and some screen with new approach
             if (attempType === 'New' || currentAttemptType == 'New') {
               if (sharedAttemptStateMap?.size) {
-                currentActivityId =
-                  sharedAttemptStateMap.size > 1 && reviewMode
-                    ? sharedAttemptStateMap.entries().next().value[0]
-                    : Array.from(sharedAttemptStateMap.keys()).pop();
-                currentAttemptState = sharedAttemptStateMap.get(currentActivityId);
+                currentAttemptState = sharedAttemptStateMap.get(activityId);
               }
             }
           }
@@ -247,7 +242,7 @@ const Adaptive = (props: DeliveryElementProps<AdaptiveModelSchema>) => {
           }); */
           }
           /* console.log('ACTIVITY READY RESULTS', { testRes, attemptStateMap }); */
-          const snapshot = getLocalizedStateSnapshot([currentActivityId], scriptEnv);
+          const snapshot = getLocalizedStateSnapshot([activityId], scriptEnv);
           // if for some reason this isn't defined, don't leave it hanging
           /*  console.log('PARTS READY NO ONREADY HOST (REVIEW MODE)', {
             partId,
