@@ -108,24 +108,27 @@ export const savePartStateToTree = createAsyncThunk(
       throw new Error('cannot find the partId to update');
     }
 
+    const currentActivity = activityTree[activityTree.length - 1];
     const updates = activityTree.map((activity: any) => {
-      const attempt = selectActivityAttemptState(rootState, activity.resourceId);
-      if (!attempt) {
-        return Promise.reject('could not find attempt!');
+      if (currentActivity.id == activity.id) {
+        const attempt = selectActivityAttemptState(rootState, activity.resourceId);
+        if (!attempt) {
+          return Promise.reject('could not find attempt!');
+        }
+        const attemptGuid = attempt.attemptGuid;
+        const partAttemptGuid = attempt.parts.find((p) => p.partId === partId)?.attemptGuid;
+        if (!partAttemptGuid) {
+          // means its in the tree, but doesn't own or inherit this part (some grandparent likely)
+          return Promise.resolve('does not own part but thats OK');
+        }
+        console.log('updating activity tree part: ', {
+          attemptGuid,
+          partAttemptGuid,
+          activity,
+          response,
+        });
+        return dispatch(savePartState({ attemptGuid, partAttemptGuid, response }));
       }
-      const attemptGuid = attempt.attemptGuid;
-      const partAttemptGuid = attempt.parts.find((p) => p.partId === partId)?.attemptGuid;
-      if (!partAttemptGuid) {
-        // means its in the tree, but doesn't own or inherit this part (some grandparent likely)
-        return Promise.resolve('does not own part but thats OK');
-      }
-      /* console.log('updating activity tree part: ', {
-        attemptGuid,
-        partAttemptGuid,
-        activity,
-        response,
-      }); */
-      return dispatch(savePartState({ attemptGuid, partAttemptGuid, response }));
     });
     return Promise.all(updates);
   },

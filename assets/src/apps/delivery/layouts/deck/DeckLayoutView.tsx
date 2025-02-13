@@ -3,6 +3,7 @@ import React, { CSSProperties, useCallback, useEffect, useMemo, useState } from 
 import { useDispatch, useSelector } from 'react-redux';
 import chroma from 'chroma-js';
 import { ActivityState, PartResponse, StudentResponse } from 'components/activities/types';
+import { IActivity } from 'apps/delivery/store/features/activities/slice';
 import { getLocalizedCurrentStateSnapshot } from 'apps/delivery/store/features/adaptivity/actions/getLocalizedCurrentStateSnapshot';
 import {
   ApplyStateOperation,
@@ -49,7 +50,7 @@ const InjectedStyles: React.FC<{ css?: string }> = (props) => {
 
 const sharedActivityInit = new Map();
 let sharedActivityPromise: any;
-
+let localCurrentActivityTree: IActivity[] | null = [];
 const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, previewMode }) => {
   const dispatch = useDispatch();
   const fieldRef = React.useRef<HTMLInputElement>(null);
@@ -253,6 +254,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
           '[AllActivitiesInit] historyModeNavigation or reviewMode is ON, clearing sharedActivityInit',
         );
         sharedActivityInit.clear();
+        localCurrentActivityTree = [];
       }
     };
   }, [
@@ -413,7 +415,10 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
         let result;
         // in addition to the current part attempt, need to lookup in the tree
         // if this part is an inherited part and also write to the child attempt records
-        const currentActivity = currentActivityTree[currentActivityTree.length - 1];
+        const currentActivity =
+          localCurrentActivityTree && localCurrentActivityTree?.length > currentActivityTree?.length
+            ? localCurrentActivityTree[localCurrentActivityTree.length - 1]
+            : currentActivityTree[currentActivityTree.length - 1];
         if (currentActivity.id !== activityId) {
           // this means that the part is inherted (we are a layer or parent screen)
           // so we need to update all children in the tree with this part response as well
@@ -422,7 +427,11 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
               attemptGuid,
               partAttemptGuid,
               response: responseMap,
-              activityTree: currentActivityTree,
+              activityTree:
+                localCurrentActivityTree &&
+                localCurrentActivityTree?.length > currentActivityTree?.length
+                  ? localCurrentActivityTree
+                  : currentActivityTree,
             }),
           );
         } else {
@@ -499,6 +508,10 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     }
   }, [currentActivityTree, triggerWindowsScrollPosition, scrollPosition, sequence]);
 
+  useEffect(() => {
+    localCurrentActivityTree = currentActivityTree;
+    });
+  }, [currentActivityTree]);
   const handleScroll = () => {
     const position = window.scrollY;
     setScrollPosition(position);
