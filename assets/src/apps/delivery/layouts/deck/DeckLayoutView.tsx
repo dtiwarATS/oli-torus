@@ -379,12 +379,13 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       response: StudentResponse,
     ) => {
       /* console.log('DECK HANDLE SAVE PART', {
-      activityId,
-      attemptGuid,
-      partAttemptGuid,
-      response,
-      currentActivityTree,
-    }); */
+        activityId,
+        attemptGuid,
+        partAttemptGuid,
+        response,
+        currentActivityTree,
+        localCurrentActivityTree,
+      }); */
       let statePrefix = `${activityId}|stage`;
       if (response.input?.length) {
         // Even if the current screen is a child screen, we always save the part component properties with their owner activity Id i.e. ownerActivityId|stage.iframe.visible = true.
@@ -510,7 +511,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
 
   useEffect(() => {
     localCurrentActivityTree = currentActivityTree;
-    });
   }, [currentActivityTree]);
   const handleScroll = () => {
     const position = window.scrollY;
