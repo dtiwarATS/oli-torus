@@ -1,0 +1,16 @@
+{
+  "id": "janus_flashcard",
+  "friendlyName": "Flash Card",
+  "description": "Plays an flash card from a url.",
+  "icon": "icon-part-flashcard.svg",
+  "author": "Project Janus Team",
+  "global": true,
+  "delivery": {
+    "element": "janus-flashcard",
+    "entry": "./delivery-entry.ts"
+  },
+  "authoring": {
+    "element": "janus-flashcard",
+    "entry": "./authoring-entry.ts"
+  }
+}
