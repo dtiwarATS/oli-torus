@@ -15,6 +15,13 @@ export interface SliderModel extends JanusAbsolutePositioned, JanusCustomCss {
   maximum: number;
   snapInterval: number;
   enabled: boolean;
+  frontText?: string;
+  backText?: string;
+  cards?: Array<{
+    id: string;
+    front: string;
+    back: string;
+  }>;
 }
 
 export const simpleSchema: JSONSchema7Object = {
@@ -162,5 +169,5 @@ export const createSchema = (): Partial<SliderModel> => ({
   minimum: 0,
   maximum: 100,
   snapInterval: 1,
-  label: 'Slider',
+  label: 'Flashcard',
 });

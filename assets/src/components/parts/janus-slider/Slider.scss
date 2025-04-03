@@ -197,3 +197,12 @@ input[type='range'] {
     }
   }
 }
+
+.flashcard {
+  width: 100%;
+
+  .flashcard-label {
+    margin-bottom: 10px;
+    font-weight: bold;
+  }
+}

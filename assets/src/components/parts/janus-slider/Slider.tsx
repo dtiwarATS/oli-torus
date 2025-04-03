@@ -1,5 +1,5 @@
 /* eslint-disable react/prop-types */
-import React, { CSSProperties, ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import React, { CSSProperties, useCallback, useEffect, useState } from 'react';
 import { CapiVariableTypes } from '../../../adaptivity/capi';
 import {
   NotificationType,
@@ -10,29 +10,26 @@ import { PartComponentProps } from '../types/parts';
 import './Slider.scss';
 import { SliderModel } from './schema';
 
+export const tagName = 'janus-slider';
+
 const Slider: React.FC<PartComponentProps<SliderModel>> = (props) => {
   const [_state, setState] = useState<unknown>([]);
   const [model, setModel] = useState<Partial<SliderModel>>({});
   const [ready, setReady] = useState<boolean>(false);
+  const [flipped, setFlipped] = useState<boolean>(false);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
 
   const id: string = props.id;
-  const [inputInnerWidth, setInputInnerWidth] = useState<number>(0);
-  const [spanInnerWidth, setSpanInnerWidth] = useState<number>(0);
-
-  const [sliderValue, setSliderValue] = useState(0);
-  const [isSliderEnabled, setIsSliderEnabled] = useState(true);
+  const [isEnabled, setIsEnabled] = useState(true);
   const [_cssClass, setCssClass] = useState('');
+
   const initialize = useCallback(async (pModel) => {
     // set defaults
-    const dEnabled = typeof pModel.enabled === 'boolean' ? pModel.enabled : isSliderEnabled;
-    setIsSliderEnabled(dEnabled);
+    const dEnabled = typeof pModel.enabled === 'boolean' ? pModel.enabled : isEnabled;
+    setIsEnabled(dEnabled);
 
     const dCssClass = pModel.customCssClass || '';
     setCssClass(dCssClass);
-
-    const dMin = pModel.minimum || 0;
-    const dValue = pModel.value || dMin;
-    setSliderValue(dValue);
 
     const initResult = await props.onInit({
       id,
@@ -48,9 +45,9 @@ const Slider: React.FC<PartComponentProps<SliderModel>> = (props) => {
           value: dCssClass,
         },
         {
-          key: 'value',
-          type: CapiVariableTypes.NUMBER,
-          value: dValue,
+          key: 'flipped',
+          type: CapiVariableTypes.BOOLEAN,
+          value: flipped,
         },
         {
           key: 'userModified',
@@ -64,19 +61,19 @@ const Slider: React.FC<PartComponentProps<SliderModel>> = (props) => {
     const currentStateSnapshot = initResult.snapshot;
     const sEnabled = currentStateSnapshot[`stage.${id}.enabled`];
     if (sEnabled !== undefined) {
-      setIsSliderEnabled(sEnabled);
+      setIsEnabled(sEnabled);
     }
-    const sValue = currentStateSnapshot[`stage.${id}.value`];
-    if (sValue !== undefined) {
-      setSliderValue(sValue);
+    const sFlipped = currentStateSnapshot[`stage.${id}.flipped`];
+    if (sFlipped !== undefined) {
+      setFlipped(sFlipped);
     }
     const sCssClass = currentStateSnapshot[`stage.${id}.customCssClass`];
     if (sCssClass !== undefined) {
       setCssClass(sCssClass);
     }
-    //Instead of hardcoding REVIEW, we can make it an global interface and then importa that here.
+
     if (initResult.context.mode === contexts.REVIEW) {
-      setIsSliderEnabled(false);
+      setIsEnabled(false);
     }
     setReady(true);
   }, []);
@@ -125,24 +122,17 @@ const Slider: React.FC<PartComponentProps<SliderModel>> = (props) => {
     ];
     const notifications = notificationsHandled.map((notificationType: NotificationType) => {
       const handler = (payload: any) => {
-        /* console.log(`${notificationType.toString()} notification handled [Slider]`, payload); */
         switch (notificationType) {
-          case NotificationType.CHECK_STARTED:
-            // nothing to do
-            break;
-          case NotificationType.CHECK_COMPLETE:
-            // nothing to do
-            break;
           case NotificationType.STATE_CHANGED:
             {
               const { mutateChanges: changes } = payload;
               const sEnabled = changes[`stage.${id}.enabled`];
               if (sEnabled !== undefined) {
-                setIsSliderEnabled(sEnabled);
+                setIsEnabled(sEnabled);
               }
-              const sValue = changes[`stage.${id}.value`];
-              if (sValue !== undefined) {
-                setSliderValue(sValue);
+              const sFlipped = changes[`stage.${id}.flipped`];
+              if (sFlipped !== undefined) {
+                setFlipped(sFlipped);
               }
               const sCssClass = changes[`stage.${id}.customCssClass`];
               if (sCssClass !== undefined) {
@@ -155,18 +145,18 @@ const Slider: React.FC<PartComponentProps<SliderModel>> = (props) => {
               const { initStateFacts: changes } = payload;
               const sEnabled = changes[`stage.${id}.enabled`];
               if (sEnabled !== undefined) {
-                setIsSliderEnabled(sEnabled);
+                setIsEnabled(sEnabled);
               }
-              const sValue = changes[`stage.${id}.value`];
-              if (sValue !== undefined) {
-                setSliderValue(sValue);
+              const sFlipped = changes[`stage.${id}.flipped`];
+              if (sFlipped !== undefined) {
+                setFlipped(sFlipped);
               }
               const sCssClass = changes[`stage.${id}.customCssClass`];
               if (sCssClass !== undefined) {
                 setCssClass(sCssClass);
               }
               if (payload.mode === contexts.REVIEW) {
-                setIsSliderEnabled(false);
+                setIsEnabled(false);
               }
             }
             break;
@@ -190,15 +180,24 @@ const Slider: React.FC<PartComponentProps<SliderModel>> = (props) => {
     height,
     _customCssClass,
     label,
-    maximum = 1,
-    minimum = 0,
-    snapInterval,
-    showDataTip,
-    showValueLabels,
-    showLabel,
-    showTicks,
-    invertScale,
+    frontText = "Front side of the card",
+    backText = "Back side of the card",
+    cards = [],
   } = model;
+
+  // Get the current card
+  const flashcards = cards.length > 0 ? cards : [{ id: '1', front: frontText, back: backText }];
+  const currentCard = flashcards[currentCardIndex];
+
+  const handlePrevCard = () => {
+    if (!isEnabled) return;
+    setCurrentCardIndex(prev => (prev > 0 ? prev - 1 : prev));
+  };
+
+  const handleNextCard = () => {
+    if (!isEnabled) return;
+    setCurrentCardIndex(prev => (prev < flashcards.length - 1 ? prev + 1 : prev));
+  };
 
   useEffect(() => {
     const styleChanges: any = {};
@@ -211,131 +210,121 @@ const Slider: React.FC<PartComponentProps<SliderModel>> = (props) => {
 
     props.onResize({ id: `${id}`, settings: styleChanges });
   }, [width, height]);
-  const styles: CSSProperties = {
+
+  const cardStyles: CSSProperties = {
     width: '100%',
-    flexDirection: model.showLabel ? 'column' : 'row',
+    height: '200px',
+    perspective: '1000px',
+    cursor: isEnabled ? 'pointer' : 'default',
   };
-  const inputStyles: CSSProperties = {
+
+  const cardInnerStyles: CSSProperties = {
+    position: 'relative',
     width: '100%',
-    height: `3px`,
+    height: '100%',
+    textAlign: 'center',
+    transition: 'transform 0.6s',
+    transformStyle: 'preserve-3d',
+    transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
     zIndex: z,
-    direction: invertScale ? 'rtl' : 'ltr',
   };
-  const divStyles: CSSProperties = {
+
+  const cardFaceStyles: CSSProperties = {
+    position: 'absolute',
     width: '100%',
-    display: `flex`,
-    flexDirection: 'row',
+    height: '100%',
+    backfaceVisibility: 'hidden',
+    display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+    borderRadius: '10px',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
   };
-  const inputWidth = inputInnerWidth;
-  const thumbWidth = spanInnerWidth;
-  const thumbHalfWidth = thumbWidth / 2;
-  const thumbPosition =
-    ((Number(sliderValue) - minimum) / (maximum - minimum)) *
-    (inputWidth - thumbWidth + thumbHalfWidth);
-  const thumbMargin = thumbHalfWidth * -1 + thumbHalfWidth / 2;
-  const getTickOptions = () => {
-    if (snapInterval) {
-      const options = [];
-      const numberOfTicks = (maximum - minimum) / snapInterval;
-      for (let i = 0; i <= numberOfTicks; i++) {
-        options.push(<option key={i} value={i * snapInterval}></option>);
-      }
-      return options;
-    }
+
+  const cardFrontStyles: CSSProperties = {
+    ...cardFaceStyles,
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
   };
-  const saveState = ({ sliderVal, userModified }: { sliderVal: number; userModified: boolean }) => {
+
+  const cardBackStyles: CSSProperties = {
+    ...cardFaceStyles,
+    backgroundColor: '#e9ecef',
+    color: '#212529',
+    transform: 'rotateY(180deg)',
+  };
+
+  const handleFlip = () => {
+    if (!isEnabled) return;
+
+    const newFlipped = !flipped;
+    setFlipped(newFlipped);
+
     props.onSave({
       id: `${id}`,
       responses: [
         {
-          key: `value`,
-          type: CapiVariableTypes.NUMBER,
-          value: sliderVal,
+          key: `flipped`,
+          type: CapiVariableTypes.BOOLEAN,
+          value: newFlipped,
         },
         {
           key: `userModified`,
           type: CapiVariableTypes.BOOLEAN,
-          value: userModified,
+          value: true,
         },
       ],
     });
   };
 
-  const handleSliderChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const sliderVal = parseFloat(e.target.value);
-    setSliderValue(sliderVal);
-    saveState({ sliderVal, userModified: true });
-  };
-  const inputTargetRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (inputTargetRef && inputTargetRef.current) {
-      setInputInnerWidth(inputTargetRef?.current?.offsetWidth);
-    }
-  });
-
-  const divTargetRef = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (divTargetRef && divTargetRef.current) {
-      setSpanInnerWidth(divTargetRef?.current?.offsetWidth);
-    }
-  });
-
-  const internalId = `${id}__slider`;
-
   return ready ? (
-    <div data-janus-type={tagName} style={styles} className={`slider`}>
-      {showLabel && (
-        <label className="input-label" htmlFor={internalId}>
-          {label}
-        </label>
-      )}
-      <div className="sliderInner">
-        {showValueLabels && <label htmlFor={internalId}>{invertScale ? maximum : minimum}</label>}
-        <div className="rangeWrap">
-          <div style={divStyles}>
-            {showDataTip && (
-              <div className="rangeValue" id={`rangeV-${internalId}`}>
-                <span
-                  ref={divTargetRef}
-                  id={`slider-thumb-${internalId}`}
-                  style={{
-                    left: `${invertScale ? undefined : thumbPosition}px`,
-                    marginLeft: `${invertScale ? undefined : thumbMargin}px`,
-                    right: `${invertScale ? thumbPosition : undefined}px`,
-                    marginRight: `${invertScale ? thumbMargin : undefined}px`,
-                  }}
-                >
-                  {sliderValue}
-                </span>
-              </div>
-            )}
-            <input
-              ref={inputTargetRef}
-              disabled={!isSliderEnabled}
-              style={inputStyles}
-              min={minimum}
-              max={maximum}
-              type={'range'}
-              value={sliderValue}
-              step={snapInterval}
-              id={internalId}
-              onChange={handleSliderChange}
-              list={showTicks ? `datalist${internalId}` : ''}
-            />
-            {showTicks && (
-              <datalist style={{ display: 'none' }} id={`datalist${internalId}`}>
-                {getTickOptions()}
-              </datalist>
-            )}
+    <div data-janus-type={tagName} className="flashcard">
+      {label && <div className="flashcard-label">{label}</div>}
+      <div style={cardStyles} onClick={handleFlip}>
+        <div style={cardInnerStyles}>
+          <div style={cardFrontStyles}>
+            <div>{currentCard?.front || frontText}</div>
+          </div>
+          <div style={cardBackStyles}>
+            <div>{currentCard?.back || backText}</div>
           </div>
         </div>
-        {showValueLabels && <label htmlFor={internalId}>{invertScale ? minimum : maximum}</label>}
       </div>
+
+      {flashcards.length > 1 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: '10px'
+        }}>
+          <button
+            onClick={handlePrevCard}
+            disabled={currentCardIndex === 0 || !isEnabled}
+            style={{
+              padding: '5px 10px',
+              cursor: isEnabled ? 'pointer' : 'default',
+              opacity: currentCardIndex === 0 || !isEnabled ? 0.5 : 1
+            }}
+          >
+            Previous
+          </button>
+          <span>Card {currentCardIndex + 1} of {flashcards.length}</span>
+          <button
+            onClick={handleNextCard}
+            disabled={currentCardIndex === flashcards.length - 1 || !isEnabled}
+            style={{
+              padding: '5px 10px',
+              cursor: isEnabled ? 'pointer' : 'default',
+              opacity: currentCardIndex === flashcards.length - 1 || !isEnabled ? 0.5 : 1
+            }}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   ) : null;
 };
-
-export const tagName = 'janus-slider';
 
 export default Slider;

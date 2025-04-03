@@ -1,8 +1,14 @@
-import React, { CSSProperties, useEffect, useRef, useState } from 'react';
+import React, { CSSProperties, useEffect, useState } from 'react';
 import { AuthorPartComponentProps } from 'components/parts/types/parts';
-import { clone } from 'utils/common';
 import './Slider.scss';
 import { SliderModel } from './schema';
+
+// Define a card type to manage multiple cards
+interface FlashCard {
+  id: string;
+  front: string;
+  back: string;
+}
 
 const SliderAuthor: React.FC<AuthorPartComponentProps<SliderModel>> = (props) => {
   const { id, model, onSaveConfigure } = props;
@@ -10,136 +16,243 @@ const SliderAuthor: React.FC<AuthorPartComponentProps<SliderModel>> = (props) =>
   const {
     z,
     label,
-    maximum = 1,
-    minimum = 0,
-    snapInterval,
-    showDataTip,
-    showValueLabels,
-    showLabel,
-    showTicks,
-    invertScale,
+    frontText = "Front side of the card",
+    backText = "Back side of the card",
+    cards = [],
   } = model;
 
-  const styles: CSSProperties = {
-    width: '100%',
-    flexDirection: showLabel ? 'column' : 'row',
-  };
-  const inputStyles: CSSProperties = {
-    width: '100%',
-    height: `3px`,
-    zIndex: z,
-    direction: invertScale ? 'rtl' : 'ltr',
-  };
-  const divStyles: CSSProperties = {
-    width: '100%',
-    display: `flex`,
-    flexDirection: 'row',
-    alignItems: 'center',
-  };
+  // Initialize with one card if none exist
+  const [flashcards, setFlashcards] = useState<FlashCard[]>(
+    cards.length > 0
+      ? cards
+      : [{ id: '1', front: frontText, back: backText }]
+  );
 
-  const [inputInnerWidth, setInputInnerWidth] = useState<number>(0);
-  const [spanInnerWidth, setSpanInnerWidth] = useState<number>(0);
-
-  const [sliderValue, _setSliderValue] = useState(0);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [newFrontText, setNewFrontText] = useState('');
+  const [newBackText, setNewBackText] = useState('');
 
   useEffect(() => {
     // all activities *must* emit onReady
     props.onReady({ id: `${props.id}` });
   }, []);
 
-  const inputWidth = inputInnerWidth;
-  const thumbWidth = spanInnerWidth;
-  const thumbHalfWidth = thumbWidth / 2;
-  const thumbPosition =
-    ((Number(sliderValue) - minimum) / (maximum - minimum)) *
-    (inputWidth - thumbWidth + thumbHalfWidth);
-  const thumbMargin = thumbHalfWidth * -1 + thumbHalfWidth / 2;
-
-  const inputTargetRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    if (inputTargetRef && inputTargetRef.current) {
-      setInputInnerWidth(inputTargetRef?.current?.offsetWidth);
-    }
-  });
+    // Save cards to model when they change
+    const modelClone = { ...model, cards: flashcards };
+    onSaveConfigure({ id, snapshot: modelClone });
+  }, [flashcards]);
 
-  const divTargetRef = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (divTargetRef && divTargetRef.current) {
-      setSpanInnerWidth(divTargetRef?.current?.offsetWidth);
-    }
-  });
-  const getTickOptions = () => {
-    if (snapInterval) {
-      const options = [];
-      const numberOfTicks = (maximum - minimum) / snapInterval;
-      const numberOfTicksThreshold = 100;
-      if (numberOfTicks > numberOfTicksThreshold) {
-        const modelClone = clone(model);
-        const snapIntervalThreshold = (maximum - minimum) / numberOfTicksThreshold;
-        // As per the requirement, Users cannot enter a value that divides the slider into more than 100 equal sections.
-        // if it goes beyond that, we need to calculate the snapIntervalThreshold between the min and max values
-        // and set the interval
-        modelClone.snapInterval = +snapIntervalThreshold.toFixed(2);
-        //we need to save the snapInterval so that the custom property is updated with adjusted values
-        onSaveConfigure({ id, snapshot: modelClone });
-        return;
-      }
-      for (let i = 0; i <= numberOfTicks; i++) {
-        options.push(<option value={i * snapInterval}></option>);
-      }
-      return options;
-    }
+  const addNewCard = () => {
+    const newCard: FlashCard = {
+      id: Date.now().toString(),
+      front: "New front text",
+      back: "New back text",
+    };
+    setFlashcards([...flashcards, newCard]);
+    setCurrentCardIndex(flashcards.length);
   };
-  const internalId = `${id}__slider`;
+
+  const deleteCurrentCard = () => {
+    if (flashcards.length <= 1) return; // Don't allow removing the last card
+
+    const newCards = [...flashcards];
+    newCards.splice(currentCardIndex, 1);
+    setFlashcards(newCards);
+    setCurrentCardIndex(Math.min(currentCardIndex, newCards.length - 1));
+  };
+
+  const startEditing = () => {
+    setNewFrontText(flashcards[currentCardIndex].front);
+    setNewBackText(flashcards[currentCardIndex].back);
+    setEditing(true);
+  };
+
+  const saveEditing = () => {
+    const newCards = [...flashcards];
+    newCards[currentCardIndex] = {
+      ...newCards[currentCardIndex],
+      front: newFrontText,
+      back: newBackText,
+    };
+    setFlashcards(newCards);
+    setEditing(false);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+  };
+
+  const goToPreviousCard = () => {
+    setCurrentCardIndex((prev) => (prev > 0 ? prev - 1 : prev));
+  };
+
+  const goToNextCard = () => {
+    setCurrentCardIndex((prev) => (prev < flashcards.length - 1 ? prev + 1 : prev));
+  };
+
+  const currentCard = flashcards[currentCardIndex];
+
+  const cardStyles: CSSProperties = {
+    width: '100%',
+    height: '200px',
+    perspective: '1000px',
+  };
+
+  const cardInnerStyles: CSSProperties = {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    textAlign: 'center',
+    transition: 'transform 0.6s',
+    transformStyle: 'preserve-3d',
+    zIndex: z,
+  };
+
+  const cardFaceStyles: CSSProperties = {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    backfaceVisibility: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '20px',
+    borderRadius: '10px',
+    boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
+  };
+
+  const cardFrontStyles: CSSProperties = {
+    ...cardFaceStyles,
+    backgroundColor: '#f8f9fa',
+    color: '#212529',
+  };
+
+  const cardBackStyles: CSSProperties = {
+    ...cardFaceStyles,
+    backgroundColor: '#e9ecef',
+    color: '#212529',
+    transform: 'rotateY(180deg)',
+  };
+
+  const buttonStyles: CSSProperties = {
+    margin: '0 5px',
+    padding: '8px 12px',
+    border: 'none',
+    borderRadius: '4px',
+    backgroundColor: '#007bff',
+    color: '#fff',
+    cursor: 'pointer',
+  };
+
+  const navigationStyles: CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: '10px',
+  };
+
+  const formGroupStyles: CSSProperties = {
+    marginBottom: '15px',
+  };
+
+  const labelStyles: CSSProperties = {
+    display: 'block',
+    marginBottom: '5px',
+    fontWeight: 'bold',
+  };
+
+  const textareaStyles: CSSProperties = {
+    width: '100%',
+    padding: '8px',
+    borderRadius: '4px',
+    border: '1px solid #ccc',
+    minHeight: '80px',
+  };
 
   return (
-    <div data-janus-type={tagName} style={styles} className={`slider`}>
-      {showLabel && (
-        <label className="input-label" htmlFor={internalId}>
-          {label}
-        </label>
-      )}
-      <div className="sliderInner">
-        {showValueLabels && <label htmlFor={internalId}>{invertScale ? maximum : minimum}</label>}
-        <div className="rangeWrap">
-          <div style={divStyles}>
-            {showDataTip && (
-              <div className="rangeValue" id={`rangeV-${internalId}`}>
-                <span
-                  ref={divTargetRef}
-                  id={`slider-thumb-${internalId}`}
-                  style={{
-                    left: `${invertScale ? undefined : thumbPosition}px`,
-                    marginLeft: `${invertScale ? undefined : thumbMargin}px`,
-                    right: `${invertScale ? thumbPosition : undefined}px`,
-                    marginRight: `${invertScale ? thumbMargin : undefined}px`,
-                  }}
-                >
-                  {sliderValue}
-                </span>
-              </div>
-            )}
-            <input
-              ref={inputTargetRef}
-              disabled={false}
-              style={inputStyles}
-              min={minimum}
-              max={maximum}
-              type={'range'}
-              value={sliderValue}
-              step={snapInterval}
-              id={internalId}
-              list={showTicks ? `datalist${internalId}` : ''}
+    <div data-janus-type={tagName} className="flashcard-container">
+      {label && <div className="flashcard-label">{label}</div>}
+
+      {editing ? (
+        <div className="card-editor">
+          <div style={formGroupStyles}>
+            <label style={labelStyles}>Front Text:</label>
+            <textarea
+              style={textareaStyles}
+              value={newFrontText}
+              onChange={(e) => setNewFrontText(e.target.value)}
             />
-            {showTicks && (
-              <datalist style={{ display: 'none' }} id={`datalist${internalId}`}>
-                {getTickOptions()}
-              </datalist>
-            )}
+          </div>
+          <div style={formGroupStyles}>
+            <label style={labelStyles}>Back Text:</label>
+            <textarea
+              style={textareaStyles}
+              value={newBackText}
+              onChange={(e) => setNewBackText(e.target.value)}
+            />
+          </div>
+          <div>
+            <button style={buttonStyles} onClick={saveEditing}>Save</button>
+            <button style={{...buttonStyles, backgroundColor: '#6c757d'}} onClick={cancelEditing}>Cancel</button>
           </div>
         </div>
-        {showValueLabels && <label htmlFor={internalId}>{invertScale ? minimum : maximum}</label>}
-      </div>
+      ) : (
+        <>
+          <div style={cardStyles}>
+            <div style={cardInnerStyles}>
+              <div style={cardFrontStyles}>
+                <div>{currentCard?.front || "Front text"}</div>
+              </div>
+              <div style={cardBackStyles}>
+                <div>{currentCard?.back || "Back text"}</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={navigationStyles}>
+            <div>
+              <button
+                style={buttonStyles}
+                onClick={startEditing}
+              >
+                Edit Card
+              </button>
+              <button
+                style={{...buttonStyles, backgroundColor: '#dc3545'}}
+                onClick={deleteCurrentCard}
+                disabled={flashcards.length <= 1}
+              >
+                Delete Card
+              </button>
+              <button
+                style={{...buttonStyles, backgroundColor: '#28a745'}}
+                onClick={addNewCard}
+              >
+                Add Card
+              </button>
+            </div>
+            <div>
+              <span>Card {currentCardIndex + 1} of {flashcards.length}</span>
+              <button
+                style={{...buttonStyles, marginLeft: '10px'}}
+                onClick={goToPreviousCard}
+                disabled={currentCardIndex === 0}
+              >
+                Previous
+              </button>
+              <button
+                style={buttonStyles}
+                onClick={goToNextCard}
+                disabled={currentCardIndex === flashcards.length - 1}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

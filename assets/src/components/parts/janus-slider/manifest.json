@@ -1,6 +1,6 @@
 {
   "id": "janus_slider",
-  "friendlyName": "Slider",
+  "friendlyName": "Flashcard",
   "description": "A slider element from min and max.",
   "icon": "icon-part-slider.svg",
   "author": "Project Janus Team",
