@@ -18,7 +18,11 @@ import {
 const manifest = require('./manifest.json');
 
 const observedAttributes: string[] = [...apiObservedAttributes];
-const customEvents: any = { ...apiCustomEvents };
+const customEvents: any = {
+  ...apiCustomEvents,
+  onSaveConfigure: 'saveconfigure',
+  onConfigure: 'configure',
+};
 
 register(AudioAuthor, manifest.authoring.element, observedAttributes, {
   customEvents,

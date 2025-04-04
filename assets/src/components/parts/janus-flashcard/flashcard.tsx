@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { PartComponentProps } from '../types/parts';
-import { AudioModel } from './schema';
+import { FlashCardModel } from './schema';
 
-const Flashcard: React.FC<PartComponentProps<AudioModel>> = (props) => {
+const Flashcard: React.FC<PartComponentProps<FlashCardModel>> = (props) => {
   const [state, setState] = useState<any[]>(Array.isArray(props.state) ? props.state : []);
   const [model, setModel] = useState<any>(Array.isArray(props.model) ? props.model : {});
   const [ready, setReady] = useState<boolean>(false);

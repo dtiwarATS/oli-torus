@@ -351,7 +351,7 @@ const ScreenAuthor: React.FC<ScreenAuthorProps> = ({ screen, onChange }) => {
   const [configEditorId] = useState(`config-editor-${screen.id || `screen${Date.now()}`}`);
 
   const handlePartConfigure = async (part: any) => {
-    /* console.log('[handlePartConfigure]', { part }); */
+    console.log('[handlePartConfigure]', { part });
     setShowConfigModal(true);
   };
 

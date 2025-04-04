@@ -215,13 +215,13 @@ const LayoutEditor: React.FC<LayoutEditorProps> = (props) => {
 
   const handlePartConfigure = useCallback(
     async (partId, configure, context) => {
-      /* console.log('LE: AUTHOR PART CONFIGURE', {
+      console.log('LE: AUTHOR PART CONFIGURE', {
         configurePartId,
         partId,
         configure,
         portalId,
         context,
-      }); */
+      });
       if (partId !== selectedPartId) {
         console.error('trying to enable configure for a not selected partId!');
         return;

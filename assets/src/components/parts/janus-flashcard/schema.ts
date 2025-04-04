@@ -3,15 +3,24 @@ import { CapiVariableTypes } from '../../../adaptivity/capi';
 import CustomFieldTemplate from '../../../apps/authoring/components/PropertyEditor/custom/CustomFieldTemplate';
 import { JanusAbsolutePositioned, JanusCustomCss } from '../types/parts';
 
-export interface AudioModel extends JanusAbsolutePositioned, JanusCustomCss {
-  src: string;
-  customCssClass: string;
-  triggerCheck: boolean;
-  autoPlay: boolean;
-  startTime: number;
-  endTime: number;
-  enableReplay: boolean;
-  subtitles: any;
+export interface FlashCardModel extends JanusAbsolutePositioned, JanusCustomCss {
+  showLabel: boolean;
+  label: string;
+  showDataTip: boolean;
+  showValueLabels: boolean;
+  showTicks: boolean;
+  invertScale: boolean;
+  minimum: number;
+  maximum: number;
+  snapInterval: number;
+  enabled: boolean;
+  frontText?: string;
+  backText?: string;
+  cards?: Array<{
+    id: string;
+    front: string;
+    back: string;
+  }>;
 }
 
 export const schema: JSONSchema7Object = {
@@ -147,13 +156,19 @@ export const adaptivitySchema = {
   currentTime: CapiVariableTypes.NUMBER,
 };
 
-export const createSchema = (): Partial<AudioModel> => ({
-  src: '',
+export const createSchema = (): Partial<FlashCardModel> => ({
+  enabled: true,
+  width: 588,
+  height: 285,
   customCssClass: '',
-  triggerCheck: false,
-  autoPlay: false,
-  startTime: 0,
-  endTime: 0,
-  enableReplay: true,
-  subtitles: [],
+  showLabel: true,
+  showDataTip: true,
+  showValueLabels: true,
+  showTicks: true,
+  showThumbByDefault: true,
+  invertScale: false,
+  minimum: 0,
+  maximum: 100,
+  snapInterval: 1,
+  label: 'Flashcard',
 });

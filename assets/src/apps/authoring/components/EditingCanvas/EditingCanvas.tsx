@@ -138,7 +138,7 @@ const EditingCanvas: React.FC = () => {
 
   // TODO: rename first param to partId
   const handlePartConfigure = async (part: any, context: any) => {
-    /* console.log('[handlePartConfigure]', { part, context }); */
+    console.log('[handlePartConfigure]', { part, context });
     dispatch(setCurrentPartPropertyFocus({ focus: false }));
     const { fullscreen = false } = context;
     setConfigModalFullscreen(fullscreen);
@@ -154,7 +154,7 @@ const EditingCanvas: React.FC = () => {
   };
 
   const handlePartSaveConfigure = async (partId: string) => {
-    /* console.log('[handlePartSaveConfigure]', { partId }); */
+    console.log('[handlePartSaveConfigure]', { partId });
     dispatch(setCurrentPartPropertyFocus({ focus: true }));
   };
 

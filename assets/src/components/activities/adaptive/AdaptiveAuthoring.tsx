@@ -149,7 +149,7 @@ const Adaptive = (
 
   const handleConfigurePart = useCallback(
     async (part: any, context: any) => {
-      /* console.log('[AdaptiveAuthoring] PART CONFIGURE', { part, context }); */
+      console.log('[AdaptiveAuthoring] PART CONFIGURE', { part, context });
       if (props.onCustomEvent) {
         const _result = await props.onCustomEvent('configurePart', {
           activityId: props.model.id,

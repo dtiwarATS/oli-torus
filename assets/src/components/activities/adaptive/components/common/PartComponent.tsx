@@ -162,7 +162,7 @@ const PartComponent: React.FC<AuthorProps | DeliveryProps> = (props) => {
           (props as AuthorProps).onConfigure === undefined &&
           currentWcEvents.configure !== stubHandler
         ) {
-          /* console.log('[PartComponent] configure changed'); */
+          console.log('[PartComponent] configure changed');
           changed = true;
         }
       }
