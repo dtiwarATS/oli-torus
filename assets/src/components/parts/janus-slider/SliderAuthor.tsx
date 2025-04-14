@@ -1,7 +1,6 @@
 import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import { AuthorPartComponentProps } from 'components/parts/types/parts';
 import { clone } from 'utils/common';
-import './Slider.scss';
 import { SliderModel } from './schema';
 
 const SliderAuthor: React.FC<AuthorPartComponentProps<SliderModel>> = (props) => {
@@ -91,54 +90,173 @@ const SliderAuthor: React.FC<AuthorPartComponentProps<SliderModel>> = (props) =>
     }
   };
   const internalId = `${id}__slider`;
+  const textOptions = ['Label 1', 'Label 2', 'Label 3', 'Label 4', 'Label 5'];
 
+  const [value, setValue] = useState(0);
+  const sliderRef = useRef<HTMLInputElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setValue(Number(e.target.value));
+  };
+
+  const getThumbPosition = () => {
+    if (!sliderRef.current) return '0%';
+    const range = sliderRef.current;
+    const percent = (value / (textOptions.length - 1)) * 100;
+    return `calc(${percent}% - 10px)`; // 10px = half of thumb width
+  };
+
+  const handleTickClick = (index: number) => {
+    setValue(index);
+  };
   return (
-    <div data-janus-type={tagName} style={styles} className={`slider`}>
-      {showLabel && (
-        <label className="input-label" htmlFor={internalId}>
-          {label}
-        </label>
-      )}
-      <div className="sliderInner">
-        {showValueLabels && <label htmlFor={internalId}>{invertScale ? maximum : minimum}</label>}
-        <div className="rangeWrap">
-          <div style={divStyles}>
-            {showDataTip && (
-              <div className="rangeValue" id={`rangeV-${internalId}`}>
-                <span
-                  ref={divTargetRef}
-                  id={`slider-thumb-${internalId}`}
-                  style={{
-                    left: `${invertScale ? undefined : thumbPosition}px`,
-                    marginLeft: `${invertScale ? undefined : thumbMargin}px`,
-                    right: `${invertScale ? thumbPosition : undefined}px`,
-                    marginRight: `${invertScale ? thumbMargin : undefined}px`,
-                  }}
-                >
-                  {sliderValue}
-                </span>
-              </div>
-            )}
-            <input
-              ref={inputTargetRef}
-              disabled={false}
-              style={inputStyles}
-              min={minimum}
-              max={maximum}
-              type={'range'}
-              value={sliderValue}
-              step={snapInterval}
-              id={internalId}
-              list={showTicks ? `datalist${internalId}` : ''}
-            />
-            {showTicks && (
-              <datalist style={{ display: 'none' }} id={`datalist${internalId}`}>
-                {getTickOptions()}
-              </datalist>
-            )}
-          </div>
+    <div data-janus-type={tagName} style={styles} className={`slider text-slider-container`}>
+      <style>
+        {`.text-slider-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 10px;
+}
+
+.text-slider-title {
+  font-size: 1.3em;
+  font-weight: 600;
+}
+
+.slider-wrapper {
+  position: relative;
+  width: 100%;
+}
+.slider-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #03A9F4 transparent transparent transparent; /* updated */
+}
+.slider-track {
+  width: 100%;
+  appearance: none;
+  height: 6px;
+  border-radius: 4px;
+  background: #e0e0e0;
+  outline: none;
+  margin-bottom: 40px;
+}
+
+
+.tick-container {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.tick {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+}
+
+.tick-mark {
+  width: 1px;
+  height: 10px;
+  background: #333;
+}
+
+.tick-label {
+  margin-top: 8px;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+.slider-track::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  width: 24px;
+  border-radius: 50%;
+  background-color: #03a9f4  !important;; /* updated */
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+  margin-top: -8px;
+}
+
+.slider-track::-moz-range-thumb {
+  height: 24px;
+  width: 24px;
+  border-radius: 50%;
+  background-color: #03a9f4  !important;; /* updated */
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Tooltip styles */
+.slider-tooltip {
+  position: absolute;
+  transform: translateX(-50%);
+  bottom: 35px;
+  background-color: #03a9f4 !important;; /* updated */
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  font-weight: bold;
+}
+
+.slider-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #03a9f4 transparent transparent transparent; /* updated */
+}
+
+.slider-track::-ms-thumb {
+  height: 24px;
+  width: 24px;
+  border-radius: 50%;
+  background-color: #03a9f4 !important;;
+  border: none;
+  cursor: pointer;
+}
+`}
+      </style>
+      <label className="text-slider-title">Text Slider</label>
+      <div className="slider-wrapper">
+        <input
+          ref={sliderRef}
+          type="range"
+          min={0}
+          max={textOptions.length - 1}
+          step={1}
+          value={value}
+          onChange={handleChange}
+          className="slider-track"
+        />
+
+        <div className="tick-container">
+          {textOptions.map((label, index) => (
+            <div key={index} className="tick" onClick={() => handleTickClick(index)}>
+              <div className="tick-mark" />
+              <div className="tick-label">{label}</div>
+            </div>
+          ))}
         </div>
-        {showValueLabels && <label htmlFor={internalId}>{invertScale ? minimum : maximum}</label>}
       </div>
     </div>
   );
