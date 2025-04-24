@@ -3,7 +3,7 @@ import { CapiVariableTypes } from '../../../adaptivity/capi';
 import CustomFieldTemplate from '../../../apps/authoring/components/PropertyEditor/custom/CustomFieldTemplate';
 import { JanusAbsolutePositioned, JanusCustomCss } from '../types/parts';
 
-export interface AudioModel extends JanusAbsolutePositioned, JanusCustomCss {
+export interface FlashcardModel extends JanusAbsolutePositioned, JanusCustomCss {
   src: string;
   customCssClass: string;
   triggerCheck: boolean;
@@ -15,55 +15,14 @@ export interface AudioModel extends JanusAbsolutePositioned, JanusCustomCss {
 }
 
 export const schema: JSONSchema7Object = {
-  src: {
-    title: 'Source',
-    type: 'string',
-  },
-  customCssClass: {
-    title: 'Custom CSS Class',
-    type: 'string',
-  },
-  triggerCheck: {
-    title: 'Trigger Check',
-    type: 'boolean',
-    description: 'if set to true then once audio is played till end, it will fire a check event',
-    default: false,
-  },
-  autoPlay: {
-    title: 'Auto Play',
-    type: 'boolean',
-    description: 'if set to true then audio player will play automatically',
-    default: false,
-  },
-  startTime: {
-    title: 'Start time(secs)',
-    type: 'number',
-    description: 'specifies the start time of the audio',
-    default: 0,
-  },
-  endTime: {
-    title: 'End time(secs)',
-    type: 'number',
-    description: 'specifies the end time of the audio',
-    default: 0,
-  },
-  enableReplay: {
-    title: 'Enable Replay',
-    type: 'boolean',
-    description: "specifies whether user can replay the audio once it's played",
-    default: true,
-  },
-  subtitles: {
-    title: 'Subtitles',
+  cardsFlipped: {
+    title: 'isFlipped',
     type: 'array',
     items: {
       type: 'object',
       properties: {
-        default: { type: 'boolean' },
-        language: { type: 'string' },
-        src: { type: 'string' },
+        flipped: { type: 'boolean' },
       },
-      required: ['src', 'language'],
     },
   },
 };
@@ -147,7 +106,7 @@ export const adaptivitySchema = {
   currentTime: CapiVariableTypes.NUMBER,
 };
 
-export const createSchema = (): Partial<AudioModel> => ({
+export const createSchema = (): Partial<FlashcardModel> => ({
   src: '',
   customCssClass: '',
   triggerCheck: false,

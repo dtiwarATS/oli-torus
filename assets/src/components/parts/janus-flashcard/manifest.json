@@ -1,8 +1,8 @@
 {
-  "id": "janus_flashcard",
-  "friendlyName": "Flash Card",
-  "description": "Plays an flash card from a url.",
-  "icon": "icon-part-flashcard.svg",
+  "id": "janus-flashcard",
+  "friendlyName": "Flashcard",
+  "description": "A slider element from min and max.",
+  "icon": "icon-part-slider.svg",
   "author": "Project Janus Team",
   "global": true,
   "delivery": {

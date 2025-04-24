@@ -4,7 +4,7 @@ import {
   customEvents as apiCustomEvents,
   observedAttributes as apiObservedAttributes,
 } from '../partsApi';
-import AudioAuthor from './flashcardAuthor';
+import FlashcardAuthor from './flashcardAuthor';
 import {
   adaptivitySchema,
   createSchema,
@@ -18,9 +18,9 @@ import {
 const manifest = require('./manifest.json');
 
 const observedAttributes: string[] = [...apiObservedAttributes];
-const customEvents: any = { ...apiCustomEvents };
+const customEvents: any = { ...apiCustomEvents, onSaveConfigure: 'saveconfigure' };
 
-register(AudioAuthor, manifest.authoring.element, observedAttributes, {
+register(FlashcardAuthor, manifest.authoring.element, observedAttributes, {
   customEvents,
   shadow: false,
   attrs: {
@@ -31,6 +31,7 @@ register(AudioAuthor, manifest.authoring.element, observedAttributes, {
   customApi: {
     getSchema: (mode: PartAuthoringMode) => (mode === 'simple' ? simpleSchema : schema),
     getUiSchema: (mode: PartAuthoringMode) => (mode === 'simple' ? simpleUISchema : uiSchema),
+
     createSchema,
     getAdaptivitySchema: async () => adaptivitySchema,
   },
