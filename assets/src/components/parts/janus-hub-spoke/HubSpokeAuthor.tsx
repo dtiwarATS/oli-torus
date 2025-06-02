@@ -69,7 +69,7 @@ const HubSpokeAuthor: React.FC<AuthorPartComponentProps<hubSpokeModel>> = (props
                 background-color: #006586;
                 border-radius: 3px;
                 border: none;
-                padding: 10px 20px;
+                padding: 10px 3px;
                 cursor: pointer;
               }
               .hub-spoke {
@@ -89,6 +89,38 @@ const HubSpokeAuthor: React.FC<AuthorPartComponentProps<hubSpokeModel>> = (props
                   display: none !important;
                 }
               }
+
+            .hub-spoke-button {
+              display: flex;
+              align-items: center;
+              justify-content: center; /* center horizontally, or use flex-start for left-align */
+              padding: 10px 3px;
+              width: 100%;
+            }
+
+            .hub-spoke-content {
+              display: flex;
+              align-items: center;
+              width: 100%;
+              gap: 10px;
+            }
+
+            .hub-spoke-content .icon {
+              flex: 0 0 auto;
+              font-size: 18px;
+              color: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .hub-spoke-content .label {
+              flex: 1;
+              color: white;
+              text-align: left;
+              display: flex;
+              align-items: center;
+            }
         `}
           </style>
           {options?.map((item, index) => (

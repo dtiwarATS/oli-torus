@@ -29,6 +29,7 @@ export const SpokeItems: React.FC<JanusHubSpokeItemProperties> = ({
   onSelected,
   val,
   IsCompleted,
+  completedSpokeCount,
 }) => {
   const spokeItemStyles: CSSProperties = {};
   if (layoutType === 'horizontalLayout') {
@@ -55,20 +56,24 @@ export const SpokeItems: React.FC<JanusHubSpokeItemProperties> = ({
       <div style={spokeItemStyles} className={` hub-spoke-item`}>
         <button
           type="button"
-          style={{ width: '100%' }}
+          style={{ width: layoutType === 'horizontalLayout' ? 'auto' : '100%' }}
           onClick={() => {
             if (onSelected) onSelected(val);
           }}
           className="btn btn-primary"
         >
-          <span
-            style={{ float: 'left', marginLeft: IsCompleted ? '10px' : '23px' }}
-            className={IsCompleted ? 'fa fa-check-circle' : ''}
-          >
-            &nbsp;
-          </span>
-
-          <SpokeItemContent itemId={itemId} spokeLabel={spokeLabel} state={state} />
+          <div className="hub-spoke-content">
+            <span className="icon">
+              {IsCompleted ? (
+                <i className="fa fa-check-circle" aria-hidden="true"></i>
+              ) : (
+                <span style={{ width: '18px', height: '18px', display: 'inline-block' }}></span>
+              )}
+            </span>
+            <div className="label">
+              <SpokeItemContent itemId={itemId} spokeLabel={spokeLabel} state={state} />
+            </div>
+          </div>
         </button>
       </div>
       {layoutType !== 'horizontalLayout' && <br style={{ padding: '0px' }} />}
@@ -300,7 +305,7 @@ const HubSpoke: React.FC<PartComponentProps<hubSpokeModel>> = (props) => {
                 background-color: #006586;
                 border-radius: 3px;
                 border: none;
-                padding: 0px 0px 0px 0px;
+                padding: 10px 3px;
                 cursor: pointer;
               }
               .hub-spoke {
@@ -320,6 +325,38 @@ const HubSpoke: React.FC<PartComponentProps<hubSpokeModel>> = (props) => {
                   display: none !important;
                 }
               }
+
+            .hub-spoke-button {
+              display: flex;
+              align-items: center;
+              justify-content: center; /* center horizontally, or use flex-start for left-align */
+              padding: 10px 3px;
+              width: 100%;
+            }
+
+            .hub-spoke-content {
+              display: flex;
+              align-items: center;
+              width: 100%;
+              gap: 10px;
+            }
+
+            .hub-spoke-content .icon {
+              flex: 0 0 auto;
+              font-size: 18px;
+              color: #ffffff;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+
+            .hub-spoke-content .label {
+              flex: 1;
+              color: white;
+              text-align: left;
+              display: flex;
+              align-items: center;
+            }
         `}
           </style>
           <div data-janus-type={tagName} style={styles} className={`hub-spoke spoke-${layoutType}`}>
@@ -341,6 +378,7 @@ const HubSpoke: React.FC<PartComponentProps<hubSpokeModel>> = (props) => {
                 disabled={!enabled}
                 columns={columns}
                 verticalGap={verticalGap}
+                completedSpokeCount={completedSpokeCount}
               />
             ))}
             {showProgressBar && (
