@@ -42,8 +42,10 @@ const MathRenderer: React.FC<MathEditorModalProps> = ({
 
   return (
     <Modal show={show} onHide={onClose} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Math Expression Editor</Modal.Title>
+      <Modal.Header closeButton className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <Modal.Title className="text-lg font-semibold text-gray-800">
+          Math Expression Editor
+        </Modal.Title>
       </Modal.Header>
       <Modal.Body>
         <label>
@@ -52,8 +54,8 @@ const MathRenderer: React.FC<MathEditorModalProps> = ({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             rows={3}
-            style={{ width: '100%', fontSize: 16 }}
             placeholder="Enter LaTeX or MathML here"
+            className="w-full p-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
           />
         </label>
 
@@ -64,23 +66,48 @@ const MathRenderer: React.FC<MathEditorModalProps> = ({
             value={altText}
             onChange={(e) => setAltText(e.target.value)}
             placeholder="Please enter alt text for screen reader"
-            style={{ width: '100%', fontSize: 14 }}
+            className="w-full p-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
           />
         </label>
 
-        <div style={{ marginTop: 16, fontSize: 18 }}>
-          <MathJaxContext
-            config={config}
-            version={3}
-            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+        <div style={{ marginTop: 24 }}>
+          <div
+            style={{
+              fontWeight: 'bold',
+              fontSize: '14px',
+              marginBottom: '8px',
+              color: '#555',
+            }}
           >
-            <MathJax dynamic>
-              <div dangerouslySetInnerHTML={{ __html: content }} role="math" aria-label={altText} />
-            </MathJax>
-          </MathJaxContext>
+            Live Preview:
+          </div>
+          <div
+            style={{
+              border: '1px solid #ddd',
+              borderRadius: '8px',
+              padding: '16px',
+              backgroundColor: '#f9f9f9',
+              fontSize: '20px',
+              minHeight: '60px',
+            }}
+          >
+            <MathJaxContext
+              config={config}
+              version={3}
+              src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+            >
+              <MathJax dynamic>
+                <div
+                  dangerouslySetInnerHTML={{ __html: content }}
+                  role="math"
+                  aria-label={altText}
+                />
+              </MathJax>
+            </MathJaxContext>
+          </div>
         </div>
       </Modal.Body>
-      <Modal.Footer>
+      <Modal.Footer className="bg-gray-50 border-t border-gray-200 px-6 py-3 flex justify-end space-x-2">
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>
