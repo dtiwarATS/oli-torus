@@ -1,8 +1,10 @@
 /* eslint-disable react/prop-types */
 import React, { CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+import { MathJax, MathJaxContext } from 'better-react-mathjax';
 import debounce from 'lodash/debounce';
 import { clone } from 'utils/common';
 import { AuthorPartComponentProps } from '../types/parts';
+import MathRenderer from './MathRenderer';
 import { ImageModel } from './schema';
 
 const ImageAuthor: React.FC<AuthorPartComponentProps<ImageModel>> = (props) => {
@@ -85,17 +87,67 @@ const ImageAuthor: React.FC<AuthorPartComponentProps<ImageModel>> = (props) => {
       onSaveConfigure({ id, snapshot: modelClone });
     }
   };
+
+  const [showModal, setShowModal] = useState(false);
+  const [mathData, setMathData] = useState({ input: '', altText: '' });
+  const config = {
+    loader: {
+      load: ['[tex]/mhchem'],
+    },
+    tex: {
+      packages: { '[+]': ['mhchem'] },
+    },
+    options: {
+      enableAssistiveMml: true,
+    },
+  };
+
+  const isMathML = mathData.input.trim().startsWith('<math');
+  const content = isMathML ? mathData.input : `\\(${mathData.input}\\)`;
   return ready ? (
-    <img
-      ref={imageContainerRef}
-      onLoad={() => {
-        manipulateImageSize(model, false);
-      }}
-      draggable="false"
-      alt={alt}
-      src={imgSrc}
-      style={imageStyles}
-    />
+    <>
+      <div>
+        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          {mathData.input ? 'Edit Expression' : 'Add Math Expression'}
+        </button>
+
+        <MathRenderer
+          show={showModal}
+          onClose={() => setShowModal(false)}
+          onSave={(data) => setMathData(data)}
+          initialInput={mathData.input}
+          initialAlt={mathData.altText}
+        />
+
+        {mathData.input && (
+          <div style={{ marginTop: 24 }}>
+            <MathJaxContext
+              config={config}
+              version={3}
+              src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
+            >
+              <MathJax dynamic>
+                <div
+                  dangerouslySetInnerHTML={{ __html: content }}
+                  role="math"
+                  aria-label={mathData.altText}
+                />
+              </MathJax>
+            </MathJaxContext>
+          </div>
+        )}
+      </div>
+      <img
+        ref={imageContainerRef}
+        onLoad={() => {
+          manipulateImageSize(model, false);
+        }}
+        draggable="false"
+        alt={alt}
+        src={imgSrc}
+        style={imageStyles}
+      />
+    </>
   ) : null;
 };
 

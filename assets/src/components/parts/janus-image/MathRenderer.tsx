@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Modal } from 'react-bootstrap';
 import { MathJax, MathJaxContext } from 'better-react-mathjax';
+import { MathLive } from 'components/common/MathLive';
 
 const config = {
   loader: {
@@ -29,7 +30,7 @@ const MathRenderer: React.FC<MathEditorModalProps> = ({
   initialInput,
   initialAlt,
 }) => {
-  const [input, setInput] = useState(initialInput || '');
+  const [input, setInput] = useState<any>(initialInput || '');
   const [altText, setAltText] = useState(initialAlt || '');
 
   const isMathML = input.trim().startsWith('<math');
@@ -104,6 +105,13 @@ const MathRenderer: React.FC<MathEditorModalProps> = ({
                 />
               </MathJax>
             </MathJaxContext>
+            <MathLive
+              value={input}
+              options={{ readOnly: false }}
+              onChange={(latex: string) =>
+                console.log({ ...input, value: latex, operator: 'equals' })
+              }
+            />
           </div>
         </div>
       </Modal.Body>
