@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { DragDropContext, Draggable, Droppable } from 'react-beautiful-dnd';
 import { Accordion, Dropdown, ListGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
 import { saveActivity } from 'apps/authoring/store/activities/actions/saveActivity';
@@ -186,115 +187,72 @@ const SequenceEditor: React.FC<any> = (props: any) => {
     direction: ReorderDirection,
   ) => {
     let hierarchyCopy = clone(hierarchy);
-    const parentId = item.custom.layerRef;
-    let itemIndex = -1;
-    let parent: any = null;
-    if (parentId) {
-      parent = findInHierarchy(hierarchyCopy, parentId);
-      if (!parent) {
-        console.error('parent not found?');
-        return;
-      }
-      itemIndex = parent.children.findIndex(
-        (child: SequenceHierarchyItem<SequenceEntryType>) =>
-          child.custom.sequenceId === item.custom.sequenceId,
-      );
-    } else {
-      itemIndex = hierarchyCopy.findIndex(
-        (child: SequenceHierarchyItem<SequenceEntryType>) =>
-          child.custom.sequenceId === item.custom.sequenceId,
-      );
-    }
-    const move = (from: number, to: number, arr: SequenceHierarchyItem<SequenceEntryType>[]) => {
-      arr.splice(to, 0, ...arr.splice(from, 1));
-    };
+    const parentId = item.custom.layerRef || null;
 
+    const parent = parentId ? findInHierarchy(hierarchyCopy, parentId) : null;
+    const siblings = parent ? parent.children : hierarchyCopy;
+    const itemIndex = siblings.findIndex(
+      (child: SequenceHierarchyItem<SequenceEntryType>) =>
+        child.custom.sequenceId === item.custom.sequenceId,
+    );
+
+    let newIndex = itemIndex;
     switch (direction) {
       case ReorderDirection.UP:
-        {
-          if (parent) {
-            move(itemIndex, itemIndex - 1, parent.children);
-          } else {
-            // if there is no parent, move within hierarchy
-            move(itemIndex, itemIndex - 1, hierarchyCopy);
-          }
-        }
+        newIndex = Math.max(0, itemIndex - 1);
         break;
       case ReorderDirection.DOWN:
-        {
-          if (parent) {
-            move(itemIndex, itemIndex + 1, parent.children);
-          } else {
-            // if there is no parent , move within hierarchy
-            move(itemIndex, itemIndex + 1, hierarchyCopy);
-          }
-        }
+        newIndex = Math.min(siblings.length - 1, itemIndex + 1);
         break;
-      case ReorderDirection.IN:
-        {
-          let sibling;
-          if (parent) {
-            sibling = parent.children[itemIndex - 1];
-            parent.children = parent.children.filter(
-              (i: SequenceHierarchyItem<SequenceEntryType>) =>
-                i.custom.sequenceId !== item.custom.sequenceId,
-            );
-          } else {
-            sibling = hierarchyCopy[itemIndex - 1];
-            hierarchyCopy = hierarchyCopy.filter(
-              (i: SequenceHierarchyItem<SequenceEntryType>) =>
-                i.custom.sequenceId !== item.custom.sequenceId,
-            );
-          }
-          if (!sibling) {
-            console.error('no sibling above to move "in" to');
-            return;
-          }
-          const itemCopy = clone(item);
-          itemCopy.custom.layerRef = sibling.custom.sequenceId;
-          sibling.children.push(itemCopy);
-        }
-        break;
-      case ReorderDirection.OUT:
-        {
-          if (!parent) {
-            console.error('no parent to move out of');
-            return;
-          }
-          // we want to pull out and become a sibling to the parent
-          parent.children = parent.children.filter(
-            (i: SequenceHierarchyItem<SequenceEntryType>) =>
-              i.custom.sequenceId !== item.custom.sequenceId,
-          );
-          if (parent.custom.layerRef) {
-            const grandparent: any = findInHierarchy(hierarchyCopy, parent.custom.layerRef);
-            if (!grandparent) {
-              console.error('no grandparent found? ' + parent.custom.layerRef);
-              return;
-            }
-            const parentIndex = grandparent.children.findIndex(
-              (i: SequenceHierarchyItem<SequenceEntryType>) =>
-                i.custom.sequenceId === parent.custom.sequenceId,
-            );
-            const itemCopy = clone(item);
-            itemCopy.custom.layerRef = grandparent.custom.sequenceId;
-            grandparent.children.splice(parentIndex + 1, 0, itemCopy);
-          } else {
-            // the parent lives in the root
-            const parentIndex = hierarchyCopy.findIndex(
-              (i: SequenceHierarchyItem<SequenceEntryType>) =>
-                i.custom.sequenceId === parent.custom.sequenceId,
-            );
-            const itemCopy = clone(item);
-            itemCopy.custom.layerRef = '';
-            hierarchyCopy.splice(parentIndex + 1, 0, itemCopy);
-          }
-        }
-        break;
+      case ReorderDirection.IN: {
+        const siblingAbove = siblings[itemIndex - 1];
+        if (!siblingAbove) return;
+        hierarchyCopy = moveItemInHierarchy(
+          hierarchy,
+          item.custom.sequenceId,
+          siblingAbove.custom.sequenceId,
+          siblingAbove.children.length,
+        );
+        const newSequence = flattenHierarchy(hierarchyCopy);
+        const newGroup = { ...currentGroup, children: newSequence };
+        dispatch(upsertGroup({ group: newGroup }));
+        await dispatch(savePage({ undoable: false }));
+        return;
+      }
+      case ReorderDirection.OUT: {
+        if (!parent) return;
+        const grandparentId = parent.custom.layerRef || null;
+        const grandparent = grandparentId ? findInHierarchy(hierarchyCopy, grandparentId) : null;
+        const targetIndex = grandparent
+          ? grandparent.children.findIndex(
+              (c) => c.custom.sequenceId === parent.custom.sequenceId,
+            ) + 1
+          : hierarchyCopy.findIndex((c: any) => c.custom.sequenceId === parent.custom.sequenceId) +
+            1;
+
+        hierarchyCopy = moveItemInHierarchy(
+          hierarchy,
+          item.custom.sequenceId,
+          grandparentId,
+          targetIndex,
+        );
+        const newSequence = flattenHierarchy(hierarchyCopy);
+        const newGroup = { ...currentGroup, children: newSequence };
+        dispatch(upsertGroup({ group: newGroup }));
+        await dispatch(savePage({ undoable: false }));
+        return;
+      }
       default:
-        throw new Error('Uknown reorder direction! ' + direction);
+        return;
     }
-    const newSequence = clone(flattenHierarchy(hierarchyCopy));
+
+    if (newIndex !== itemIndex) {
+      const moved = clone(siblings[itemIndex]);
+      siblings.splice(itemIndex, 1);
+      siblings.splice(newIndex, 0, moved);
+    }
+
+    const newSequence = flattenHierarchy(hierarchyCopy);
     const newGroup = { ...currentGroup, children: newSequence };
     dispatch(upsertGroup({ group: newGroup }));
     await dispatch(savePage({ undoable: false }));
@@ -457,99 +415,194 @@ const SequenceEditor: React.FC<any> = (props: any) => {
     });
   }, [currentSequenceId, sequence]);
 
-  const getHierarchyList = (items: any, isParentQB = false) =>
-    items.map(
-      (
-        item: SequenceHierarchyItem<SequenceEntryType>,
-        index: number,
-        arr: SequenceHierarchyItem<SequenceEntryType>,
-      ) => {
-        const title = item.custom?.sequenceName || item.activitySlug;
-        return (
-          <Accordion key={`${index}`}>
-            <ListGroup.Item
-              as="li"
-              className={`aa-sequence-item${item.children.length ? ' is-parent' : ''}`}
-              key={`${item.custom.sequenceId}`}
-              active={item.custom.sequenceId === currentSequenceId}
-              onClick={(e) => {
-                !(e as any).isContextButtonClick && handleItemClick(e, item);
-                props.contextMenuClicked((e as any).isContextButtonClick);
-              }}
-              tabIndex={0}
-            >
-              <div className="aa-sequence-details-wrapper">
-                <div className="details">
-                  {item.children.length ? (
-                    <ContextAwareToggle
-                      eventKey={`toggle_${item.custom.sequenceId}`}
-                      className={`aa-sequence-item-toggle`}
-                      callback={sequenceItemToggleClick}
-                    />
-                  ) : null}
-                  {!itemToRename ? (
-                    <span className="title" title={item.custom.sequenceId}>
-                      {title}
-                    </span>
-                  ) : itemToRename.custom.sequenceId !== item.custom.sequenceId ? (
-                    <span className="title">{title}</span>
-                  ) : null}
-                  {itemToRename && itemToRename?.custom.sequenceId === item.custom.sequenceId && (
-                    <input
-                      ref={inputToFocus}
-                      className="form-control form-control-sm rename-sequence-input"
-                      type="text"
-                      placeholder={item.custom.isLayer ? 'Layer name' : 'Screen name'}
-                      value={itemToRename.custom.sequenceName}
-                      onClick={(e) => e.preventDefault()}
-                      onChange={(e) =>
-                        setItemToRename({
-                          ...itemToRename,
-                          custom: { ...itemToRename.custom, sequenceName: e.target.value },
-                        })
-                      }
-                      onFocus={(e) => {
-                        e.target.select();
-                        dispatch(setCurrentPartPropertyFocus({ focus: false }));
-                      }}
-                      onBlur={() => {
-                        handleRenameItem(item);
-                        dispatch(setCurrentPartPropertyFocus({ focus: true }));
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRenameItem(item);
-                        if (e.key === 'Escape') setItemToRename(undefined);
-                      }}
-                    />
-                  )}
-                  {item.custom.isLayer && (
-                    <i className="fas fa-layer-group ml-2 align-middle aa-isLayer" />
-                  )}
-                  {item.custom.isBank && (
-                    <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />
-                  )}
-                </div>
-                <SequenceItemContextMenu
-                  id={item.activitySlug}
-                  item={item}
-                  index={index}
-                  arr={arr}
-                  isParentQB={isParentQB}
-                  contextMenuClicked={props.contextMenuClicked}
-                />
-              </div>
-              {item.children.length ? (
-                <Accordion.Collapse eventKey={`toggle_${item.custom.sequenceId}`}>
-                  <ListGroup as="ol" className="aa-sequence nested">
-                    {getHierarchyList(item.children, item.custom.isBank)}
-                  </ListGroup>
-                </Accordion.Collapse>
-              ) : null}
-            </ListGroup.Item>
-          </Accordion>
-        );
-      },
+  const moveItemInHierarchy = (
+    hierarchy: SequenceHierarchyItem<SequenceEntryType>[],
+    itemId: string,
+    targetParentId: string | null,
+    targetIndex: number,
+  ): SequenceHierarchyItem<SequenceEntryType>[] => {
+    const hierarchyCopy = clone(hierarchy);
+    let itemToMove: SequenceHierarchyItem<SequenceEntryType> | null = null;
+
+    // Remove the item from current position
+    const removeItem = (items: any[], parentId: string | null): any => {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.custom.sequenceId === itemId) {
+          itemToMove = clone(item);
+          items.splice(i, 1);
+          return true;
+        } else if (item.children?.length) {
+          if (removeItem(item.children, item.custom.sequenceId)) return true;
+        }
+      }
+      return false;
+    };
+
+    const insertItem = (items: any[], parentId: string | null, index: number) => {
+      if (!itemToMove) return;
+
+      if (!parentId) {
+        itemToMove.custom.layerRef = '';
+        items.splice(index, 0, itemToMove);
+        return;
+      }
+
+      const parent = findInHierarchy(items, parentId);
+      if (!parent) {
+        console.warn('Target parent not found:', parentId);
+        return;
+      }
+
+      itemToMove.custom.layerRef = parent.custom.sequenceId;
+      parent.children.splice(index, 0, itemToMove);
+    };
+
+    removeItem(hierarchyCopy, null);
+    insertItem(hierarchyCopy, targetParentId, targetIndex);
+
+    return hierarchyCopy;
+  };
+
+  const onDragEnd = async (result: any) => {
+    const { destination, draggableId } = result;
+
+    if (!destination) return;
+
+    const targetParentId = destination.droppableId === 'root' ? null : destination.droppableId;
+    const newHierarchy = moveItemInHierarchy(
+      hierarchy,
+      draggableId,
+      targetParentId,
+      destination.index,
     );
+
+    const newSequence = flattenHierarchy(newHierarchy);
+    const newGroup = { ...currentGroup, children: newSequence };
+
+    dispatch(upsertGroup({ group: newGroup }));
+    await dispatch(savePage({ undoable: false }));
+  };
+
+  const getHierarchyList = (
+    items: SequenceHierarchyItem<SequenceEntryType>[],
+    isParentQB = false,
+    droppableId = 'root',
+  ) =>
+    items.map((item, index, arr) => {
+      const title = item.custom?.sequenceName || item.activitySlug;
+      const hasChildren = item.children.length > 0;
+      const sequenceId = item.custom.sequenceId;
+
+      return (
+        <Draggable key={sequenceId} draggableId={sequenceId} index={index}>
+          {(provided, snapshot) => (
+            <Accordion
+              ref={provided.innerRef}
+              {...provided.draggableProps}
+              {...provided.dragHandleProps}
+            >
+              <ListGroup.Item
+                as="li"
+                className={`aa-sequence-item${hasChildren ? ' is-parent' : ''} ${
+                  snapshot.isDragging ? 'is-dragging' : ''
+                }`}
+                active={sequenceId === currentSequenceId}
+                onClick={(e) => {
+                  !(e as any).isContextButtonClick && handleItemClick(e, item);
+                  props.contextMenuClicked((e as any).isContextButtonClick);
+                }}
+                tabIndex={0}
+              >
+                <div className="aa-sequence-details-wrapper">
+                  <div className="details">
+                    {hasChildren && (
+                      <ContextAwareToggle
+                        eventKey={`toggle_${sequenceId}`}
+                        className="aa-sequence-item-toggle"
+                        callback={sequenceItemToggleClick}
+                      />
+                    )}
+
+                    {!itemToRename ? (
+                      <span className="title" title={sequenceId}>
+                        {title}
+                      </span>
+                    ) : itemToRename.custom.sequenceId !== sequenceId ? (
+                      <span className="title">{title}</span>
+                    ) : null}
+
+                    {itemToRename?.custom.sequenceId === sequenceId && (
+                      <input
+                        ref={inputToFocus}
+                        className="form-control form-control-sm rename-sequence-input"
+                        type="text"
+                        placeholder={item.custom.isLayer ? 'Layer name' : 'Screen name'}
+                        value={itemToRename.custom.sequenceName}
+                        onClick={(e) => e.preventDefault()}
+                        onChange={(e) =>
+                          setItemToRename({
+                            ...itemToRename,
+                            custom: { ...itemToRename.custom, sequenceName: e.target.value },
+                          })
+                        }
+                        onFocus={(e) => {
+                          e.target.select();
+                          dispatch(setCurrentPartPropertyFocus({ focus: false }));
+                        }}
+                        onBlur={() => {
+                          handleRenameItem(item);
+                          dispatch(setCurrentPartPropertyFocus({ focus: true }));
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleRenameItem(item);
+                          if (e.key === 'Escape') setItemToRename(undefined);
+                        }}
+                      />
+                    )}
+
+                    {item.custom.isLayer && (
+                      <i className="fas fa-layer-group ml-2 align-middle aa-isLayer" />
+                    )}
+                    {item.custom.isBank && (
+                      <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />
+                    )}
+                  </div>
+
+                  <SequenceItemContextMenu
+                    id={item.activitySlug}
+                    item={item}
+                    index={index}
+                    arr={arr}
+                    isParentQB={isParentQB}
+                    contextMenuClicked={props.contextMenuClicked}
+                  />
+                </div>
+
+                {/* Nested droppable if children exist */}
+                {hasChildren && (
+                  <Accordion.Collapse eventKey={`toggle_${sequenceId}`}>
+                    <Droppable droppableId={sequenceId} type="CHILD">
+                      {(provided) => (
+                        <ListGroup
+                          as="ol"
+                          className="aa-sequence nested"
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                        >
+                          {getHierarchyList(item.children, item.custom.isBank, sequenceId)}
+                          {provided.placeholder}
+                        </ListGroup>
+                      )}
+                    </Droppable>
+                  </Accordion.Collapse>
+                )}
+              </ListGroup.Item>
+            </Accordion>
+          )}
+        </Draggable>
+      );
+    });
 
   return (
     <Accordion
@@ -608,17 +661,32 @@ const SequenceEditor: React.FC<any> = (props: any) => {
           </Dropdown>
         </OverlayTrigger>
       </div>
-      <Accordion.Collapse
-        eventKey="0"
-        style={{
-          overflowY: 'auto',
-          maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '55vh',
-        }}
-      >
-        <ListGroup ref={refSequence} as="ol" className="aa-sequence">
-          {getHierarchyList(hierarchy)}
-        </ListGroup>
-      </Accordion.Collapse>
+      <DragDropContext onDragEnd={onDragEnd}>
+        <Droppable droppableId="root">
+          {(provided) => (
+            <Accordion.Collapse
+              eventKey="0"
+              style={{
+                overflowY: 'auto',
+                maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '55vh',
+              }}
+            >
+              <ListGroup
+                as="ol"
+                className="aa-sequence"
+                ref={(el) => {
+                  provided.innerRef(el);
+                  (refSequence as React.MutableRefObject<any>).current = el;
+                }}
+                {...provided.droppableProps}
+              >
+                {getHierarchyList(hierarchy)}
+                {provided.placeholder}
+              </ListGroup>
+            </Accordion.Collapse>
+          )}
+        </Droppable>
+      </DragDropContext>
       {showConfirmDelete && (
         <ConfirmDelete
           show={showConfirmDelete}
