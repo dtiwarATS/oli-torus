@@ -663,7 +663,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
       </div>
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="root">
-          {(provided) => (
+          {(provided, snapshot) => (
             <Accordion.Collapse
               eventKey="0"
               style={{
