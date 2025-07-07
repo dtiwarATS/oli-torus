@@ -466,6 +466,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
 
   const onDragEnd = async (result: any) => {
     const { destination, draggableId } = result;
+    console.log({ result });
 
     if (!destination) return;
 
@@ -484,6 +485,31 @@ const SequenceEditor: React.FC<any> = (props: any) => {
     await dispatch(savePage({ undoable: false }));
   };
 
+  const [expandedMap, setExpandedMap] = useState<{ [key: string]: boolean }>({});
+
+  useEffect(() => {
+    const handler = (sequenceId: string, detail: string) => {
+      setExpandedMap((prev) => ({ ...prev, [sequenceId]: detail === 'expand' }));
+    };
+    const listeners: { [key: string]: any } = {};
+    const attachListeners = (items: SequenceHierarchyItem<SequenceEntryType>[]) => {
+      items.forEach((item) => {
+        const eventName = `toggle_${item.custom.sequenceId}`;
+        const listener = (e: any) => handler(item.custom.sequenceId, e.detail);
+        document.addEventListener(eventName, listener);
+        listeners[eventName] = listener;
+        if (item.children && item.children.length > 0) attachListeners(item.children);
+      });
+    };
+    attachListeners(hierarchy);
+    return () => {
+      Object.entries(listeners).forEach(([eventName, listener]) => {
+        document.removeEventListener(eventName, listener);
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hierarchy]);
+
   const getHierarchyList = (
     items: SequenceHierarchyItem<SequenceEntryType>[],
     isParentQB = false,
@@ -493,6 +519,10 @@ const SequenceEditor: React.FC<any> = (props: any) => {
       const title = item.custom?.sequenceName || item.activitySlug;
       const hasChildren = item.children.length > 0;
       const sequenceId = item.custom.sequenceId;
+      const canHaveChildren = item.custom.isLayer || item.custom.isBank || true; // allow all to be droppable
+
+      // Track expanded/collapsed state for each item
+      const expanded = expandedMap[sequenceId] || false;
 
       return (
         <Draggable key={sequenceId} draggableId={sequenceId} index={index}>
@@ -579,10 +609,10 @@ const SequenceEditor: React.FC<any> = (props: any) => {
                   />
                 </div>
 
-                {/* Nested droppable if children exist */}
-                {hasChildren && (
-                  <Accordion.Collapse eventKey={`toggle_${sequenceId}`}>
-                    <Droppable droppableId={sequenceId} type="CHILD">
+                {/* Always render nested droppable for every item that can have children, but hide if not expanded */}
+                {canHaveChildren && (
+                  <div style={{ display: expanded ? undefined : 'none' }}>
+                    <Droppable droppableId={sequenceId} type="ITEM">
                       {(provided) => (
                         <ListGroup
                           as="ol"
@@ -595,7 +625,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
                         </ListGroup>
                       )}
                     </Droppable>
-                  </Accordion.Collapse>
+                  </div>
                 )}
               </ListGroup.Item>
             </Accordion>
@@ -662,7 +692,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
         </OverlayTrigger>
       </div>
       <DragDropContext onDragEnd={onDragEnd}>
-        <Droppable droppableId="root">
+        <Droppable droppableId="root" type="ITEM">
           {(provided, snapshot) => (
             <Accordion.Collapse
               eventKey="0"
