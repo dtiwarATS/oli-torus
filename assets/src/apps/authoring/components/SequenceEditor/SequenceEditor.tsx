@@ -550,7 +550,14 @@ const SequenceEditor: React.FC<any> = (props: any) => {
                       <ContextAwareToggle
                         eventKey={`toggle_${sequenceId}`}
                         className="aa-sequence-item-toggle"
-                        callback={sequenceItemToggleClick}
+                        callback={() => {
+                          const isOpen = expanded;
+                          document.dispatchEvent(
+                            new CustomEvent(`toggle_${sequenceId}`, {
+                              detail: isOpen ? 'collapse' : 'expand',
+                            }),
+                          );
+                        }}
                       />
                     )}
 
@@ -611,9 +618,9 @@ const SequenceEditor: React.FC<any> = (props: any) => {
 
                 {/* Always render nested droppable for every item that can have children, but hide if not expanded */}
                 {canHaveChildren && (
-                  <div style={{ display: expanded ? undefined : 'none' }}>
-                    <Droppable droppableId={sequenceId} type="ITEM">
-                      {(provided) => (
+                  <Droppable droppableId={sequenceId} type="ITEM">
+                    {(provided) => (
+                      <div style={{ display: expanded ? undefined : 'none' }}>
                         <ListGroup
                           as="ol"
                           className="aa-sequence nested"
@@ -623,9 +630,9 @@ const SequenceEditor: React.FC<any> = (props: any) => {
                           {getHierarchyList(item.children, item.custom.isBank, sequenceId)}
                           {provided.placeholder}
                         </ListGroup>
-                      )}
-                    </Droppable>
-                  </div>
+                      </div>
+                    )}
+                  </Droppable>
                 )}
               </ListGroup.Item>
             </Accordion>
