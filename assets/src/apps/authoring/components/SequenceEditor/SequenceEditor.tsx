@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Accordion, Dropdown, ListGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
+import {
+  SimpleTreeItemWrapper,
+  SortableTree,
+  TreeItemComponentProps,
+  TreeItems,
+} from 'dnd-kit-sortable-tree';
 import { saveActivity } from 'apps/authoring/store/activities/actions/saveActivity';
 import { setCurrentPartPropertyFocus } from 'apps/authoring/store/parts/slice';
 import { clone } from 'utils/common';
@@ -551,93 +557,138 @@ const SequenceEditor: React.FC<any> = (props: any) => {
       },
     );
 
-  return (
-    <Accordion
-      className="aa-sequence-editor"
-      ref={ref}
-      defaultActiveKey="0"
-      activeKey={open ? '0' : '-1'}
-      style={{
-        height: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : 'auto',
-        maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '60vh',
-        overflow: 'hidden',
-      }}
-    >
-      <div className="aa-panel-section-title-bar">
-        <div className="d-flex align-items-center">
-          <ContextAwareToggle eventKey="0" onClick={toggleOpen} />
-          <span className="title">Sequence Editor</span>
-        </div>
-        <OverlayTrigger
-          placement="right"
-          delay={{ show: 150, hide: 150 }}
-          overlay={
-            <Tooltip id="button-tooltip" style={{ fontSize: '12px' }}>
-              New Sequence
-            </Tooltip>
-          }
+  // eslint-disable-next-line react/display-name
+  const TreeItem = React.forwardRef<HTMLDivElement, TreeItemComponentProps<any>>((props, ref) => {
+    console.log({ props });
+    const title = props?.item?.custom?.sequenceName || props?.item?.activitySlug;
+    return (
+      <SimpleTreeItemWrapper {...props} ref={ref}>
+        <ListGroup.Item
+          as="li"
+          className={`aa-sequence-item${props?.item?.children?.length ? ' is-parent' : ''}`}
+          key={`${props.item.id}`}
+          tabIndex={0}
         >
-          <Dropdown>
-            <Dropdown.Toggle variant="link" id="sequence-add">
-              <i className="fa fa-plus" />
-            </Dropdown.Toggle>
+          {title}
+        </ListGroup.Item>
+      </SimpleTreeItemWrapper>
+    );
+  });
+  type MinimalTreeItemData = {
+    value: string;
+  };
+  const initialViableMinimalData: TreeItems<MinimalTreeItemData> = [
+    {
+      id: 1,
+      value: 'Jane',
+      children: [
+        { id: 4, value: 'John' },
+        { id: 5, value: 'Sally' },
+      ],
+    },
+    { id: 2, value: 'Fred', children: [{ id: 6, value: 'Eugene' }] },
+    { id: 3, value: 'Helen' },
+  ];
+  console.log({ hierarchy });
+  const [items, setItems] = useState(hierarchy);
 
-            <Dropdown.Menu>
-              <Dropdown.Item
-                onClick={() => {
-                  handleItemAdd(undefined);
-                }}
-              >
-                <i className="fas fa-desktop mr-2" /> Screen
-              </Dropdown.Item>
-              <Dropdown.Item
-                onClick={() => {
-                  handleItemAdd(undefined, true);
-                }}
-              >
-                <i className="fas fa-layer-group mr-2" /> Layer
-              </Dropdown.Item>
-              <Dropdown.Item
-                onClick={() => {
-                  handleItemAdd(undefined, false, true);
-                }}
-              >
-                <i className="fas fa-cubes mr-2" /> Question Bank
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown>
-        </OverlayTrigger>
-      </div>
-      <Accordion.Collapse
-        eventKey="0"
+  useEffect(() => {
+    setItems(hierarchy);
+  }, [hierarchy]);
+
+  return (
+    <>
+      <Accordion
+        className="aa-sequence-editor"
+        ref={ref}
+        defaultActiveKey="0"
+        activeKey={open ? '0' : '-1'}
         style={{
-          overflowY: 'auto',
-          maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '55vh',
+          height: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : 'auto',
+          maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '60vh',
+          overflow: 'hidden',
         }}
       >
-        <ListGroup ref={refSequence} as="ol" className="aa-sequence">
-          {getHierarchyList(hierarchy)}
-        </ListGroup>
-      </Accordion.Collapse>
-      {showConfirmDelete && (
-        <ConfirmDelete
-          show={showConfirmDelete}
-          elementType={
-            itemToDelete.custom?.isLayer
-              ? 'Layer'
-              : itemToDelete.custom?.isBank
-              ? 'Question Bank'
-              : 'Screen'
-          }
-          elementName={itemToDelete.custom?.sequenceName}
-          deleteHandler={() => handleItemDelete(itemToDelete)}
-          cancelHandler={() => {
-            setShowConfirmDelete(false);
-            setItemToDelete(undefined);
+        <div className="aa-panel-section-title-bar">
+          <div className="d-flex align-items-center">
+            <ContextAwareToggle eventKey="0" onClick={toggleOpen} />
+            <span className="title">Sequence Editor</span>
+          </div>
+          <OverlayTrigger
+            placement="right"
+            delay={{ show: 150, hide: 150 }}
+            overlay={
+              <Tooltip id="button-tooltip" style={{ fontSize: '12px' }}>
+                New Sequence
+              </Tooltip>
+            }
+          >
+            <Dropdown>
+              <Dropdown.Toggle variant="link" id="sequence-add">
+                <i className="fa fa-plus" />
+              </Dropdown.Toggle>
+
+              <Dropdown.Menu>
+                <Dropdown.Item
+                  onClick={() => {
+                    handleItemAdd(undefined);
+                  }}
+                >
+                  <i className="fas fa-desktop mr-2" /> Screen
+                </Dropdown.Item>
+                <Dropdown.Item
+                  onClick={() => {
+                    handleItemAdd(undefined, true);
+                  }}
+                >
+                  <i className="fas fa-layer-group mr-2" /> Layer
+                </Dropdown.Item>
+                <Dropdown.Item
+                  onClick={() => {
+                    handleItemAdd(undefined, false, true);
+                  }}
+                >
+                  <i className="fas fa-cubes mr-2" /> Question Bank
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown>
+          </OverlayTrigger>
+        </div>
+        <Accordion.Collapse
+          eventKey="0"
+          style={{
+            overflowY: 'auto',
+            maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '55vh',
           }}
-        />
-      )}
-    </Accordion>
+        >
+          <>
+            <SortableTree items={items} onItemsChanged={setItems} TreeItemComponent={TreeItem} />
+
+            <ListGroup ref={refSequence} as="ol" className="aa-sequence">
+              {getHierarchyList(hierarchy)}
+            </ListGroup>
+          </>
+        </Accordion.Collapse>
+        {showConfirmDelete && (
+          <ConfirmDelete
+            show={showConfirmDelete}
+            elementType={
+              itemToDelete.custom?.isLayer
+                ? 'Layer'
+                : itemToDelete.custom?.isBank
+                ? 'Question Bank'
+                : 'Screen'
+            }
+            elementName={itemToDelete.custom?.sequenceName}
+            deleteHandler={() => handleItemDelete(itemToDelete)}
+            cancelHandler={() => {
+              setShowConfirmDelete(false);
+              setItemToDelete(undefined);
+            }}
+          />
+        )}
+      </Accordion>
+    </>
   );
 };
 
