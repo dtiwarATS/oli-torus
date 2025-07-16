@@ -44,6 +44,24 @@ const ImageAuthor: React.FC<AuthorPartComponentProps<ImageModel>> = (props) => {
       debounceImage(model);
     }
   }, [model]);
+
+  useEffect(() => {
+    const { imageSrc, src, defaultSrc } = model;
+
+    // Prefer imageSrc if it's valid
+    const preferred = imageSrc && imageSrc !== defaultSrc ? imageSrc : src;
+
+    // If values are out of sync, update both to the preferred one
+    if (imageSrc !== src && preferred) {
+      const modelClone = clone(model);
+      modelClone.imageSrc = preferred;
+      modelClone.src = preferred;
+
+      onSaveConfigure({ id, snapshot: modelClone });
+    }
+
+  }, [model]);
+
   const imageContainerRef = useRef<HTMLImageElement>(null);
   const manipulateImageSize = (updatedModel: ImageModel, isfromDebaunce: boolean) => {
     if (!imageContainerRef?.current || !isfromDebaunce) {
