@@ -315,7 +315,7 @@ export function isDefined<T>(value: T | undefined): value is T {
  * - All non-zero digits are significant.
  * - Zeros between non-zero digits are significant.
  * - Trailing zeros in decimal numbers are significant.
- * - Trailing zeros in whole numbers are not significant unless a decimal point is explicitly present.
+ * - Trailing zeros in whole numbers are not significant unless followed by a decimal point (e.g., "100.").
  * - Scientific notation is parsed correctly (e.g., "1.23e4" has 3 sig figs).
  *
  * @param input - The number input as a string (e.g., "0.01230", "100", "1.23e4").
@@ -323,35 +323,26 @@ export function isDefined<T>(value: T | undefined): value is T {
  */
 export const countSigFigs = (input: string): number => {
   if (!input || isNaN(Number(input))) return 0;
-  console.log('countSigFigs', { input });
+
   const trimmed = input.trim();
 
-  // Handle scientific notation (e.g., "1.23e4")
-  const sciMatch = trimmed.match(/^[-+]?\d*\.?\d+e[-+]?\d+$/i);
+  // Handle scientific notation like "1.23e4"
+  const sciMatch = trimmed.match(/^(-)?(\d+(\.\d+)?)(e[-+]?\d+)?$/i);
   if (sciMatch) {
-    const [base] = trimmed.toLowerCase().split('e');
-    const cleaned = base.replace(/^[-+]?0+(?=\d)/, ''); // remove leading zeros
-    const digits = cleaned.replace('.', '');
-    return digits.length;
+    const [base] = trimmed.split(/e/i);
+    return base.replace('.', '').replace(/^0+/, '').length;
   }
 
-  // If it's a decimal number
+  // Remove leading/trailing zeros (depending on decimal)
   if (trimmed.includes('.')) {
-    const cleaned = trimmed.replace(/^[-+]?0+(?=\d)/, ''); // remove leading zeros before the first non-zero digit
-    const digits = cleaned.replace('.', '');
-    return digits.length;
+    // Decimal number: all digits except leading zeros are significant
+    return trimmed
+      .replace(/^[-+]?0+/, '') // Remove leading zeros
+      .replace('.', '').length; // Remove decimal
+  } else {
+    // Integer: trailing zeros are not significant unless scientific notation
+    return trimmed
+      .replace(/^[-+]?0*/, '') // Remove leading zeros
+      .replace(/0+$/, '').length; // Remove trailing zeros
   }
-
-  // If it's an integer without decimal point
-  const integerMatch = trimmed.match(/^[-+]?(\d+)\.?$/);
-  if (integerMatch) {
-    const [significantPart] = trimmed.split('.');
-    const hasExplicitDot = trimmed.endsWith('.');
-    const stripped = significantPart.replace(/^[-+]?0+/, '');
-    return hasExplicitDot
-      ? stripped.length // trailing zeros are significant if number ends with dot (e.g., "100.")
-      : stripped.replace(/0+$/, '').length; // else, trailing zeros not significant
-  }
-
-  return 0;
 };
