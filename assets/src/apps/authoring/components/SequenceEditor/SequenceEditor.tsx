@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Accordion, Dropdown, ListGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
+import { UniqueIdentifier } from '@dnd-kit/core';
 import {
   SimpleTreeItemWrapper,
   SortableTree,
+  TreeItem,
   TreeItemComponentProps,
-  TreeItems,
 } from 'dnd-kit-sortable-tree';
 import { saveActivity } from 'apps/authoring/store/activities/actions/saveActivity';
 import { setCurrentPartPropertyFocus } from 'apps/authoring/store/parts/slice';
@@ -557,44 +558,53 @@ const SequenceEditor: React.FC<any> = (props: any) => {
       },
     );
 
-  // eslint-disable-next-line react/display-name
-  const TreeItem = React.forwardRef<HTMLDivElement, TreeItemComponentProps<any>>((props, ref) => {
-    console.log({ props });
-    const title = props?.item?.custom?.sequenceName || props?.item?.activitySlug;
-    return (
-      <SimpleTreeItemWrapper {...props} ref={ref}>
-        <ListGroup.Item
-          as="li"
-          className={`aa-sequence-item${props?.item?.children?.length ? ' is-parent' : ''}`}
-          key={`${props.item.id}`}
-          tabIndex={0}
-        >
-          {title}
-        </ListGroup.Item>
-      </SimpleTreeItemWrapper>
+  function convertToTreeItems(
+    nodes: SequenceHierarchyItem<SequenceEntryChild>[],
+  ): TreeItem<SequenceHierarchyItem<SequenceEntryChild>>[] {
+    return nodes.map(
+      (node): TreeItem<SequenceHierarchyItem<SequenceEntryChild>> => ({
+        id: node.custom.sequenceId || (node.activitySlug as UniqueIdentifier),
+        custom: node.custom,
+        children: node.children ? convertToTreeItems(node.children) : [],
+        collapsed: false,
+      }),
     );
-  });
-  type MinimalTreeItemData = {
-    value: string;
-  };
-  const initialViableMinimalData: TreeItems<MinimalTreeItemData> = [
-    {
-      id: 1,
-      value: 'Jane',
-      children: [
-        { id: 4, value: 'John' },
-        { id: 5, value: 'Sally' },
-      ],
-    },
-    { id: 2, value: 'Fred', children: [{ id: 6, value: 'Eugene' }] },
-    { id: 3, value: 'Helen' },
-  ];
-  console.log({ hierarchy });
-  const [items, setItems] = useState(hierarchy);
+  }
+
+  const [items, setItems] = useState<TreeItem<SequenceHierarchyItem<SequenceEntryChild>>[]>([]);
 
   useEffect(() => {
-    setItems(hierarchy);
+    console.log({ hierarchy });
+    setItems(convertToTreeItems(hierarchy));
   }, [hierarchy]);
+
+  interface CustomTreeItemProps<T> extends TreeItemComponentProps<T> {
+    contextMenuClicked?: () => void;
+  }
+
+  // eslint-disable-next-line react/display-name
+  const CustomTreeItem = React.forwardRef<HTMLDivElement, CustomTreeItemProps<any>>(
+    (props, ref) => {
+      const { contextMenuClicked, ...treeItemProps } = props;
+      const title = treeItemProps?.item?.custom?.sequenceName || treeItemProps?.item?.activitySlug;
+
+      return (
+        <SimpleTreeItemWrapper {...treeItemProps} ref={ref}>
+          <ListGroup.Item
+            as="div"
+            className={`aa-sequence-item${
+              treeItemProps?.item?.children?.length ? ' is-parent' : ''
+            }`}
+            key={`${treeItemProps.item.id}`}
+            tabIndex={0}
+            onClick={contextMenuClicked}
+          >
+            {title}
+          </ListGroup.Item>
+        </SimpleTreeItemWrapper>
+      );
+    },
+  );
 
   return (
     <>
@@ -662,7 +672,13 @@ const SequenceEditor: React.FC<any> = (props: any) => {
           }}
         >
           <>
-            <SortableTree items={items} onItemsChanged={setItems} TreeItemComponent={TreeItem} />
+            <SortableTree
+              items={items}
+              onItemsChanged={setItems}
+              TreeItemComponent={(treeItemProps) => (
+                <CustomTreeItem {...treeItemProps} contextMenuClicked={props.contextMenuClicked} />
+              )}
+            />
 
             <ListGroup ref={refSequence} as="ol" className="aa-sequence">
               {getHierarchyList(hierarchy)}
