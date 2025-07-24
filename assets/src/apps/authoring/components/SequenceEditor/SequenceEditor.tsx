@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Accordion, Dropdown, ListGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
+import { SimpleTreeItemWrapper, SortableTree, TreeItemComponentProps } from 'dnd-kit-sortable-tree';
 import { saveActivity } from 'apps/authoring/store/activities/actions/saveActivity';
 import { setCurrentPartPropertyFocus } from 'apps/authoring/store/parts/slice';
 import { clone } from 'utils/common';
@@ -373,6 +374,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
     addNewSequence(newSequenceEntry, item.activitySlug);
   };
   const handleRenameItem = async (item: any) => {
+    console.log('setting Items TO Rname ==>', { item });
     if (itemToRename.custom.sequenceName.trim() === '') {
       setItemToRename(undefined);
       return;
@@ -394,6 +396,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
     dispatch(upsertGroup({ group: newGroup }));
     await dispatch(upsertActivity({ activity: activityClone }));
     await dispatch(savePage({ undoable: false }));
+    console.log('setting Items TO Rname ==> undefined');
     setItemToRename(undefined);
   };
 
@@ -457,99 +460,121 @@ const SequenceEditor: React.FC<any> = (props: any) => {
     });
   }, [currentSequenceId, sequence]);
 
-  const getHierarchyList = (items: any, isParentQB = false) =>
-    items.map(
-      (
-        item: SequenceHierarchyItem<SequenceEntryType>,
-        index: number,
-        arr: SequenceHierarchyItem<SequenceEntryType>,
-      ) => {
-        const title = item.custom?.sequenceName || item.activitySlug;
-        return (
-          <Accordion key={`${index}`}>
-            <ListGroup.Item
-              as="li"
-              className={`aa-sequence-item${item.children.length ? ' is-parent' : ''}`}
-              key={`${item.custom.sequenceId}`}
-              active={item.custom.sequenceId === currentSequenceId}
-              onClick={(e) => {
-                !(e as any).isContextButtonClick && handleItemClick(e, item);
-                props.contextMenuClicked((e as any).isContextButtonClick);
-              }}
-              tabIndex={0}
-            >
-              <div className="aa-sequence-details-wrapper">
-                <div className="details">
-                  {item.children.length ? (
-                    <ContextAwareToggle
-                      eventKey={`toggle_${item.custom.sequenceId}`}
-                      className={`aa-sequence-item-toggle`}
-                      callback={sequenceItemToggleClick}
-                    />
-                  ) : null}
-                  {!itemToRename ? (
-                    <span className="title" title={item.custom.sequenceId}>
-                      {title}
-                    </span>
-                  ) : itemToRename.custom.sequenceId !== item.custom.sequenceId ? (
-                    <span className="title">{title}</span>
-                  ) : null}
-                  {itemToRename && itemToRename?.custom.sequenceId === item.custom.sequenceId && (
-                    <input
-                      ref={inputToFocus}
-                      className="form-control form-control-sm rename-sequence-input"
-                      type="text"
-                      placeholder={item.custom.isLayer ? 'Layer name' : 'Screen name'}
-                      value={itemToRename.custom.sequenceName}
-                      onClick={(e) => e.preventDefault()}
-                      onChange={(e) =>
-                        setItemToRename({
-                          ...itemToRename,
-                          custom: { ...itemToRename.custom, sequenceName: e.target.value },
-                        })
-                      }
-                      onFocus={(e) => {
-                        e.target.select();
-                        dispatch(setCurrentPartPropertyFocus({ focus: false }));
-                      }}
-                      onBlur={() => {
-                        handleRenameItem(item);
-                        dispatch(setCurrentPartPropertyFocus({ focus: true }));
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRenameItem(item);
-                        if (e.key === 'Escape') setItemToRename(undefined);
-                      }}
-                    />
-                  )}
-                  {item.custom.isLayer && (
-                    <i className="fas fa-layer-group ml-2 align-middle aa-isLayer" />
-                  )}
-                  {item.custom.isBank && (
-                    <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />
-                  )}
-                </div>
-                <SequenceItemContextMenu
-                  id={item.activitySlug}
-                  item={item}
-                  index={index}
-                  arr={arr}
-                  isParentQB={isParentQB}
-                  contextMenuClicked={props.contextMenuClicked}
-                />
-              </div>
-              {item.children.length ? (
-                <Accordion.Collapse eventKey={`toggle_${item.custom.sequenceId}`}>
-                  <ListGroup as="ol" className="aa-sequence nested">
-                    {getHierarchyList(item.children, item.custom.isBank)}
-                  </ListGroup>
-                </Accordion.Collapse>
+  // eslint-disable-next-line react/display-name
+  const TreeItem = React.forwardRef<HTMLDivElement, TreeItemComponentProps<any>>((props, ref) => {
+    const title = props?.item?.custom?.sequenceName || props?.item?.activitySlug;
+    const itemToRename = props?.item.parameters.itemToRename;
+    const { item } = props;
+    return (
+      <SimpleTreeItemWrapper {...props} ref={ref}>
+        <ListGroup.Item
+          as="li"
+          className={`aa-sequence-item${props?.item?.children?.length ? ' is-parent' : ''}`}
+          style={{ width: '100%' }}
+          key={`${props.item.id}`}
+          active={item.custom.sequenceId === item.parameters.currentSequenceId}
+          tabIndex={0}
+          onClick={(e) => {
+            !(e as any).isContextButtonClick && item.parameters.handleItemClick(e, item);
+            item.parameters.contextMenuClicked((e as any).isContextButtonClick);
+          }}
+        >
+          <div
+            className="aa-sequence-details-wrapper"
+            style={{ width: '100%', paddingLeft: '5px' }}
+          >
+            <div className="details" style={{ width: '100%' }}>
+              {!itemToRename ? (
+                <span className="title" style={{ width: '100%' }} title={item.custom.sequenceId}>
+                  {title}
+                </span>
+              ) : itemToRename.custom.sequenceId !== item.custom.sequenceId ? (
+                <span className="title">{title}</span>
               ) : null}
-            </ListGroup.Item>
-          </Accordion>
-        );
-      },
+              {itemToRename && itemToRename?.custom.sequenceId === item.custom.sequenceId && (
+                <input
+                  ref={inputToFocus}
+                  className="form-control form-control-sm rename-sequence-input"
+                  type="text"
+                  placeholder={item.custom.isLayer ? 'Layer name' : 'Screen name'}
+                  value={itemToRename.custom.sequenceName}
+                  onClick={(e) => e.preventDefault()}
+                  onChange={(e) =>
+                    item.parameters.setItemToRename({
+                      ...itemToRename,
+                      custom: { ...itemToRename.custom, sequenceName: e.target.value },
+                    })
+                  }
+                  onFocus={(e) => {
+                    e.target.select();
+                    dispatch(item.parameters.setCurrentPartPropertyFocus({ focus: false }));
+                  }}
+                  onBlur={() => {
+                    console.log('onblur called');
+                    item.parameters.handleRenameItem(item);
+                    dispatch(item.parameters.setCurrentPartPropertyFocus({ focus: true }));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') item.parameters.handleRenameItem(item);
+                    if (e.key === 'Escape') item.parameters.setItemToRename(undefined);
+                  }}
+                />
+              )}
+              {item.custom.isLayer && (
+                <i className="fas fa-layer-group ml-2 align-middle aa-isLayer" />
+              )}
+              {item.custom.isBank && <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />}
+            </div>
+            <SequenceItemContextMenu
+              id={item.activitySlug}
+              item={item}
+              index={item.parameters.index}
+              arr={item.parameters.arr}
+              isParentQB={item.parameters.isParentQB}
+              contextMenuClicked={item.parameters.contextMenuClicked}
+            />
+          </div>
+        </ListGroup.Item>
+      </SimpleTreeItemWrapper>
     );
+  });
+
+  const manageTreeData = useCallback(
+    (data: any) => {
+      return data.map((item: any, index: number) => {
+        const newItem: any = {
+          ...item,
+          parameters: {
+            contextMenuClicked: props?.contextMenuClicked,
+            itemToRename,
+            index, // This index is specific to the current level
+            arr: data?.length,
+            isParentQB: item.custom.isBank,
+            currentSequenceId,
+            setCurrentPartPropertyFocus,
+            handleRenameItem,
+            setItemToRename,
+            handleItemClick,
+          },
+        };
+
+        // 🚀 If the item has children, recursively call manageTreeData on them
+        if (item.children && item.children.length > 0) {
+          newItem.children = manageTreeData(item.children); // Recursion!
+        }
+
+        return newItem;
+      });
+    },
+    [itemToRename, setItemToRename, handleRenameItem, handleItemClick, props.contextMenuClicked],
+  );
+
+  const [treeItems, setTreeItems] = useState(manageTreeData(hierarchy));
+
+  useEffect(() => {
+    console.log('Rebuilding ', { itemToRename });
+    setTreeItems(manageTreeData(hierarchy));
+  }, [hierarchy, itemToRename]);
 
   return (
     <Accordion
@@ -616,7 +641,13 @@ const SequenceEditor: React.FC<any> = (props: any) => {
         }}
       >
         <ListGroup ref={refSequence} as="ol" className="aa-sequence">
-          {getHierarchyList(hierarchy)}
+          <>
+            <SortableTree
+              items={treeItems}
+              onItemsChanged={setTreeItems}
+              TreeItemComponent={TreeItem}
+            />
+          </>
         </ListGroup>
       </Accordion.Collapse>
       {showConfirmDelete && (
