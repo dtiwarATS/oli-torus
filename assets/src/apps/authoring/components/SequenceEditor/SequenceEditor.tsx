@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Accordion, Dropdown, ListGroup, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useDispatch, useSelector } from 'react-redux';
+import { useDndContext } from '@dnd-kit/core';
 import { SimpleTreeItemWrapper, SortableTree, TreeItemComponentProps } from 'dnd-kit-sortable-tree';
 import { saveActivity } from 'apps/authoring/store/activities/actions/saveActivity';
 import { setCurrentPartPropertyFocus } from 'apps/authoring/store/parts/slice';
@@ -462,15 +463,29 @@ const SequenceEditor: React.FC<any> = (props: any) => {
 
   // eslint-disable-next-line react/display-name
   const TreeItem = React.forwardRef<HTMLDivElement, TreeItemComponentProps<any>>((props, ref) => {
-    const title = props?.item?.custom?.sequenceName || props?.item?.activitySlug;
-    const itemToRename = props?.item.parameters.itemToRename;
-    const { item } = props;
+    const { item, depth } = props;
+    const { active } = useDndContext();
+    const title = item?.custom?.sequenceName || props?.item?.activitySlug;
+    const itemToRename = item.parameters.itemToRename;
+    const inputToFocus = useRef<HTMLInputElement>(null);
+    const indent = depth * 10;
+
+    useEffect(() => {
+      if (
+        itemToRename &&
+        itemToRename.custom.sequenceId === item.custom.sequenceId &&
+        inputToFocus.current
+      ) {
+        inputToFocus.current.focus();
+      }
+    }, [itemToRename, item.custom.sequenceId]);
+
     return (
       <SimpleTreeItemWrapper {...props} ref={ref}>
         <ListGroup.Item
           as="li"
           className={`aa-sequence-item${props?.item?.children?.length ? ' is-parent' : ''}`}
-          style={{ width: '100%' }}
+          style={{ width: '100%', paddingLeft: `${indent}px` }}
           key={`${props.item.id}`}
           active={item.custom.sequenceId === item.parameters.currentSequenceId}
           tabIndex={0}
@@ -507,12 +522,14 @@ const SequenceEditor: React.FC<any> = (props: any) => {
                   }
                   onFocus={(e) => {
                     e.target.select();
-                    dispatch(item.parameters.setCurrentPartPropertyFocus({ focus: false }));
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+                    item.parameters.setCurrentPartPropertyFocus({ focus: false });
                   }}
                   onBlur={() => {
                     console.log('onblur called');
                     item.parameters.handleRenameItem(item);
-                    dispatch(item.parameters.setCurrentPartPropertyFocus({ focus: true }));
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+                    item.parameters.setCurrentPartPropertyFocus({ focus: true });
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') item.parameters.handleRenameItem(item);
@@ -520,29 +537,34 @@ const SequenceEditor: React.FC<any> = (props: any) => {
                   }}
                 />
               )}
-              {item.custom.isLayer && (
+
+              {!active && item.custom.isLayer && (
                 <i className="fas fa-layer-group ml-2 align-middle aa-isLayer" />
               )}
-              {item.custom.isBank && <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />}
+              {!active && item.custom.isBank && (
+                <i className="fas fa-cubes ml-2 align-middle aa-isLayer" />
+              )}
             </div>
-            <SequenceItemContextMenu
-              id={item.activitySlug}
-              item={item}
-              index={item.parameters.index}
-              arr={item.parameters.arr}
-              isParentQB={item.parameters.isParentQB}
-              contextMenuClicked={item.parameters.contextMenuClicked}
-            />
+            {!active && (
+              <SequenceItemContextMenu
+                id={item.activitySlug}
+                item={item}
+                index={item.parameters.index}
+                arr={item.parameters.arr}
+                isParentQB={item.parameters.isParentQB}
+                contextMenuClicked={item.parameters.contextMenuClicked}
+              />
+            )}
           </div>
         </ListGroup.Item>
       </SimpleTreeItemWrapper>
     );
   });
-
   const manageTreeData = useCallback(
     (data: any) => {
       return data.map((item: any, index: number) => {
         const newItem: any = {
+          id: item?.id || guid(),
           ...item,
           parameters: {
             contextMenuClicked: props?.contextMenuClicked,
@@ -566,15 +588,24 @@ const SequenceEditor: React.FC<any> = (props: any) => {
         return newItem;
       });
     },
-    [itemToRename, setItemToRename, handleRenameItem, handleItemClick, props.contextMenuClicked],
+    [
+      itemToRename,
+      currentSequenceId,
+      props?.setItemToRename,
+      handleRenameItem,
+      handleItemClick,
+      props.contextMenuClicked,
+    ],
   );
 
   const [treeItems, setTreeItems] = useState(manageTreeData(hierarchy));
 
   useEffect(() => {
-    console.log('Rebuilding ', { itemToRename });
-    setTreeItems(manageTreeData(hierarchy));
-  }, [hierarchy, itemToRename]);
+    console.log({ hierarchy });
+    const ddd = manageTreeData(hierarchy);
+    console.log('Rebuilding ', { ddd, itemToRename, currentSequenceId });
+    setTreeItems(ddd);
+  }, [hierarchy, currentSequenceId, itemToRename]);
 
   return (
     <Accordion
