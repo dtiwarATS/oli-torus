@@ -468,6 +468,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
     const title = item?.custom?.sequenceName || props?.item?.activitySlug;
     const itemToRename = item.parameters.itemToRename;
     const inputToFocus = useRef<HTMLInputElement>(null);
+    const liRef = useRef<HTMLLIElement>(null);
     const indent = depth * 10;
 
     useEffect(() => {
@@ -480,9 +481,23 @@ const SequenceEditor: React.FC<any> = (props: any) => {
       }
     }, [itemToRename, item.custom.sequenceId]);
 
+    useEffect(() => {
+      if (
+        item.custom.sequenceId === item.parameters.currentSequenceId &&
+        liRef?.current &&
+        !itemToRename
+      ) {
+        requestAnimationFrame(() => {
+          liRef.current?.focus();
+          liRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+      }
+    }, [item, itemToRename, item.parameters.currentSequenceId]);
+
     return (
       <SimpleTreeItemWrapper {...props} ref={ref}>
         <ListGroup.Item
+          ref={liRef}
           as="li"
           className={`aa-sequence-item${props?.item?.children?.length ? ' is-parent' : ''}`}
           style={{ width: '100%', paddingLeft: `${indent}px` }}
