@@ -485,14 +485,15 @@ const SequenceEditor: React.FC<any> = (props: any) => {
       if (
         item.custom.sequenceId === item.parameters.currentSequenceId &&
         liRef?.current &&
-        !itemToRename
+        !itemToRename &&
+        !active
       ) {
         requestAnimationFrame(() => {
           liRef.current?.focus();
           liRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
       }
-    }, [item, itemToRename, item.parameters.currentSequenceId]);
+    }, [item, itemToRename, item.parameters.currentSequenceId, active]);
 
     return (
       <SimpleTreeItemWrapper {...props} ref={ref}>
