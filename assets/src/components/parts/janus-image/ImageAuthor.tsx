@@ -22,7 +22,7 @@ const ImageAuthor: React.FC<AuthorPartComponentProps<ImageModel>> = (props) => {
     props.onReady({ id, responses: [] });
   }, [ready]);
 
-  const { width, height, src, imageSrc, alt, defaultSrc } = model;
+  const { width, height, alt } = model;
   const imageStyles: CSSProperties = {
     width,
     height,
@@ -37,13 +37,34 @@ const ImageAuthor: React.FC<AuthorPartComponentProps<ImageModel>> = (props) => {
   );
 
   useEffect(() => {
+    if (!model) return;
+
+    const { imageSrc, src, defaultSrc } = model;
+
     //Image Source will take precedence ( if there is an image link present in it). If Image Sorce is blank then it will display image link from src.
-    const imageSource = imageSrc?.length && imageSrc != defaultSrc ? imageSrc : src;
-    setImgSrc(imageSource);
-    if (imageSource != defaultSrc && model?.lockAspectRatio) {
+    const preferred = imageSrc && imageSrc !== defaultSrc ? imageSrc : src;
+
+    // Set image src for display
+    setImgSrc(preferred);
+
+    // Debounce if a real image and aspect lock enabled
+    if (preferred && preferred !== defaultSrc && model.lockAspectRatio) {
       debounceImage(model);
     }
+
+    // Sync logic: only sync if both fields are set and not clearing one of them
+    const bothHaveValue = imageSrc && src;
+    const valuesOutOfSync = imageSrc !== src;
+
+    if (bothHaveValue && valuesOutOfSync) {
+      const modelClone = clone(model);
+      modelClone.imageSrc = preferred;
+      modelClone.src = preferred;
+
+      onSaveConfigure({ id, snapshot: modelClone });
+    }
   }, [model]);
+
   const imageContainerRef = useRef<HTMLImageElement>(null);
   const manipulateImageSize = (updatedModel: ImageModel, isfromDebaunce: boolean) => {
     if (!imageContainerRef?.current || !isfromDebaunce) {
