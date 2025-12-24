@@ -318,6 +318,14 @@ defmodule OliWeb.Router do
     live "/users/link_account", LinkAccountLive, :link_account
   end
 
+  if Application.compile_env(:oli, :enable_playwright_scenarios, false) do
+    scope "/test", OliWeb do
+      pipe_through [:api]
+
+      post "/scenario-yaml", PlaywrightScenarioController, :run
+    end
+  end
+
   scope "/", OliWeb do
     pipe_through [:browser, :redirect_if_author_is_authenticated]
 
@@ -1133,7 +1141,7 @@ defmodule OliWeb.Router do
   end
 
   scope "/sections/:section_slug/instructor_dashboard", OliWeb do
-    pipe_through([:browser, :delivery_protected])
+    pipe_through([:browser, :require_section, :delivery_protected])
 
     get(
       "/downloads/progress/:container_id/:title",
