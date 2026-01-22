@@ -725,16 +725,63 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
         return;
       }
 
-      // Fallback to existing behavior for non-subscreen navigation
-      requestAnimationFrame(() => {
-        // Double-check with setTimeout to ensure content is rendered
-        setTimeout(() => {
-          // Verify ref exists and content is rendered before focusing
-          if (contentRef.current) {
-            contentRef.current.focus();
-          }
-        }, 0);
-      });
+      // For full screen navigation, focus the topmost element
+      setTimeout(() => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            // Verify ref exists and content is rendered before focusing
+            if (contentRef.current) {
+              // Find the first focusable element in the content container (topmost element)
+              const attemptFocus = (retries = 3) => {
+                // First, try to find focusable in the first adaptive element (topmost screen)
+                const adaptiveElements = contentRef.current!.querySelectorAll('oli-adaptive-delivery');
+                const firstAdaptiveElement = adaptiveElements[0] as HTMLElement;
+
+                if (firstAdaptiveElement) {
+                  const firstFocusable = findFocusableInElement(firstAdaptiveElement);
+                  if (firstFocusable) {
+                    firstFocusable.focus();
+                    // Scroll to top of content
+                    contentRef.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                    // Verify focus worked
+                    if (document.activeElement === firstFocusable) {
+                      return true;
+                    }
+                  }
+                }
+
+                // If no focusable element found in adaptive elements, try direct query in content
+                const focusableSelector =
+                  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+                const directFocusable = contentRef.current!.querySelector(focusableSelector) as HTMLElement;
+                if (directFocusable) {
+                  directFocusable.focus();
+                  contentRef.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  if (document.activeElement === directFocusable) {
+                    return true;
+                  }
+                }
+
+                // Fallback: focus the content container itself
+                if (contentRef.current) {
+                  contentRef.current.focus();
+                  contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+
+                // Retry if attempts remaining
+                if (retries > 0) {
+                  setTimeout(() => attemptFocus(retries - 1), 50);
+                  return false;
+                }
+                return false;
+              };
+
+              attemptFocus();
+            }
+          });
+        });
+      }, 100);
       previousTreeLengthRef.current = localActivityTree.length;
       previousActivityIdRef.current = currentActivityId;
     }
