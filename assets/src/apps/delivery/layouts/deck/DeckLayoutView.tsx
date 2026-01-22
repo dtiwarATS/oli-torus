@@ -611,6 +611,50 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     });
   }, [currentActivityTree, historyModeNavigation, reviewMode]);
 
+  // Helper function to find focusable elements, including in shadow DOM
+  const findFocusableInElement = (element: HTMLElement): HTMLElement | null => {
+    const focusableSelector =
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    // First, try light DOM (regular children)
+    const lightDOMFocusable = element.querySelector(focusableSelector) as HTMLElement;
+    if (lightDOMFocusable) {
+      return lightDOMFocusable;
+    }
+
+    // Check for shadow root
+    if (element.shadowRoot) {
+      const shadowFocusable = element.shadowRoot.querySelector(focusableSelector) as HTMLElement;
+      if (shadowFocusable) {
+        return shadowFocusable;
+      }
+
+      // Also check nested custom elements in shadow root
+      const nestedCustomElements = element.shadowRoot.querySelectorAll('*');
+      for (const nested of Array.from(nestedCustomElements)) {
+        if (nested instanceof HTMLElement) {
+          const nestedFocusable = findFocusableInElement(nested);
+          if (nestedFocusable) {
+            return nestedFocusable;
+          }
+        }
+      }
+    }
+
+    // Check nested custom elements in light DOM
+    const customElements = element.querySelectorAll('*');
+    for (const customEl of Array.from(customElements)) {
+      if (customEl instanceof HTMLElement && customEl !== element) {
+        const nestedFocusable = findFocusableInElement(customEl);
+        if (nestedFocusable) {
+          return nestedFocusable;
+        }
+      }
+    }
+
+    return null;
+  };
+
   // Focus management: Move focus to content container when screen changes
   useEffect(() => {
     if (!localActivityTree || localActivityTree.length === 0) {
@@ -639,22 +683,54 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     if (currentActivityId && currentActivityId !== previousActivityIdRef.current) {
       const isSubscreenNavigation = localActivityTree.length > previousTreeLengthRef.current;
 
+      // If navigating to a subscreen, focus the subscreen element instead
+      if (isSubscreenNavigation) {
+        setTimeout(() => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              // Verify ref exists and content is rendered before focusing
+              if (contentRef.current) {
+                const adaptiveElements = contentRef.current.querySelectorAll('oli-adaptive-delivery');
+                const lastElement = adaptiveElements[adaptiveElements.length - 1] as HTMLElement;
+                if (lastElement) {
+                  // Find and focus the first focusable element inside the subscreen
+                  const attemptFocus = (retries = 3) => {
+                    const firstFocusable = findFocusableInElement(lastElement);
+                    if (firstFocusable) {
+                      firstFocusable.focus();
+                      lastElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                      // Verify focus worked
+                      if (document.activeElement === firstFocusable) {
+                        return true;
+                      }
+                    }
+
+                    // Retry if attempts remaining
+                    if (retries > 0) {
+                      setTimeout(() => attemptFocus(retries - 1), 50);
+                      return false;
+                    }
+                    return false;
+                  };
+
+                  attemptFocus();
+                }
+              }
+            });
+          });
+        }, 100);
+        previousTreeLengthRef.current = localActivityTree.length;
+        previousActivityIdRef.current = currentActivityId;
+        return;
+      }
+
+      // Fallback to existing behavior for non-subscreen navigation
       requestAnimationFrame(() => {
         // Double-check with setTimeout to ensure content is rendered
         setTimeout(() => {
           // Verify ref exists and content is rendered before focusing
           if (contentRef.current) {
-            // If navigating to a subscreen, focus the subscreen element instead
-            if (isSubscreenNavigation) {
-              const adaptiveElements = contentRef.current.querySelectorAll('oli-adaptive-delivery');
-              const lastElement = adaptiveElements[adaptiveElements.length - 1] as HTMLElement;
-              if (lastElement) {
-                lastElement.focus();
-                lastElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                return;
-              }
-            }
-            // Fallback to existing behavior for non-subscreen navigation
             contentRef.current.focus();
           }
         }, 0);
