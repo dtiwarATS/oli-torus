@@ -690,7 +690,8 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
             requestAnimationFrame(() => {
               // Verify ref exists and content is rendered before focusing
               if (contentRef.current) {
-                const adaptiveElements = contentRef.current.querySelectorAll('oli-adaptive-delivery');
+                const adaptiveElements =
+                  contentRef.current.querySelectorAll('oli-adaptive-delivery');
                 const lastElement = adaptiveElements[adaptiveElements.length - 1] as HTMLElement;
                 if (lastElement) {
                   // Find and focus the first focusable element inside the subscreen
@@ -734,7 +735,8 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
               // Find the first focusable element in the content container (topmost element)
               const attemptFocus = (retries = 3) => {
                 // First, try to find focusable in the first adaptive element (topmost screen)
-                const adaptiveElements = contentRef.current!.querySelectorAll('oli-adaptive-delivery');
+                const adaptiveElements =
+                  contentRef.current!.querySelectorAll('oli-adaptive-delivery');
                 const firstAdaptiveElement = adaptiveElements[0] as HTMLElement;
 
                 if (firstAdaptiveElement) {
@@ -754,7 +756,9 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
                 // If no focusable element found in adaptive elements, try direct query in content
                 const focusableSelector =
                   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-                const directFocusable = contentRef.current!.querySelector(focusableSelector) as HTMLElement;
+                const directFocusable = contentRef.current!.querySelector(
+                  focusableSelector,
+                ) as HTMLElement;
                 if (directFocusable) {
                   directFocusable.focus();
                   contentRef.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
