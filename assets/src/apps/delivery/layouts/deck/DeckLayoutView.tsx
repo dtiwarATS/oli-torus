@@ -616,17 +616,99 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     const focusableSelector =
       'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-    // First, try light DOM (regular children)
-    const lightDOMFocusable = element.querySelector(focusableSelector) as HTMLElement;
-    if (lightDOMFocusable) {
-      return lightDOMFocusable;
+    // Walk through all elements in DOM order and find the first focusable element
+    // This ensures we respect DOM order: if input comes first, focus it; if text-flow comes first, focus it
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT, {
+      acceptNode: (node) => {
+        const el = node as HTMLElement;
+        // Check if it's a label
+        if (el.tagName.toLowerCase() === 'label') {
+          return NodeFilter.FILTER_ACCEPT;
+        }
+        // Check if it's a text-flow element
+        if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
+          return NodeFilter.FILTER_ACCEPT;
+        }
+        // Check if it's an interactive element
+        if (
+          (el.tagName === 'BUTTON' && !el.hasAttribute('disabled')) ||
+          (el.tagName === 'A' && el.hasAttribute('href')) ||
+          ((el.tagName === 'INPUT' ||
+            el.tagName === 'SELECT' ||
+            el.tagName === 'TEXTAREA') &&
+            !el.hasAttribute('disabled')) ||
+          (el.hasAttribute('tabindex') && el.getAttribute('tabindex') !== '-1')
+        ) {
+          return NodeFilter.FILTER_ACCEPT;
+        }
+        return NodeFilter.FILTER_SKIP;
+      },
+    });
+
+    let firstElement: HTMLElement | null = null;
+    let node = walker.nextNode();
+    while (node) {
+      const el = node as HTMLElement;
+      // If it's a text-flow element, make it focusable
+      if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
+        if (el.getAttribute('tabindex') === null) {
+          el.setAttribute('tabindex', '-1');
+        }
+      }
+      firstElement = el;
+      break; // Found the first element in DOM order
+    }
+
+    if (firstElement) {
+      return firstElement;
     }
 
     // Check for shadow root
     if (element.shadowRoot) {
-      const shadowFocusable = element.shadowRoot.querySelector(focusableSelector) as HTMLElement;
-      if (shadowFocusable) {
-        return shadowFocusable;
+      // Walk through shadow DOM elements in DOM order
+      const shadowWalker = document.createTreeWalker(element.shadowRoot, NodeFilter.SHOW_ELEMENT, {
+        acceptNode: (node) => {
+          const el = node as HTMLElement;
+          // Check if it's a label
+          if (el.tagName.toLowerCase() === 'label') {
+            return NodeFilter.FILTER_ACCEPT;
+          }
+          // Check if it's a text-flow element
+          if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
+            return NodeFilter.FILTER_ACCEPT;
+          }
+          // Check if it's an interactive element
+          if (
+            (el.tagName === 'BUTTON' && !el.hasAttribute('disabled')) ||
+            (el.tagName === 'A' && el.hasAttribute('href')) ||
+            ((el.tagName === 'INPUT' ||
+              el.tagName === 'SELECT' ||
+              el.tagName === 'TEXTAREA') &&
+              !el.hasAttribute('disabled')) ||
+            (el.hasAttribute('tabindex') && el.getAttribute('tabindex') !== '-1')
+          ) {
+            return NodeFilter.FILTER_ACCEPT;
+          }
+          return NodeFilter.FILTER_SKIP;
+        },
+      });
+
+      let shadowFirstElement: HTMLElement | null = null;
+      let shadowNode = shadowWalker.nextNode();
+      while (shadowNode) {
+        const el = shadowNode as HTMLElement;
+        // If it's a text-flow element, make it focusable
+        if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
+          if (el.getAttribute('tabindex') === null) {
+            el.setAttribute('tabindex', '-1');
+          }
+        }
+        shadowFirstElement = el;
+        break; // Found the first element in DOM order
+      }
+
+      if (shadowFirstElement) {
+        return shadowFirstElement;
       }
 
       // Also check nested custom elements in shadow root
