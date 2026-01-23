@@ -616,6 +616,15 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     const focusableSelector =
       'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+    // First, make all text-flow elements focusable so they're in tab order
+    const allTextFlows = element.querySelectorAll('[data-janus-type="janus-text-flow"]');
+    allTextFlows.forEach((textFlow) => {
+      const el = textFlow as HTMLElement;
+      if (el.getAttribute('tabindex') === null) {
+        el.setAttribute('tabindex', '0');
+      }
+    });
+
     // Walk through all elements in DOM order and find the first focusable element
     // This ensures we respect DOM order: if input comes first, focus it; if text-flow comes first, focus it
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT, {
@@ -649,12 +658,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     let node = walker.nextNode();
     while (node) {
       const el = node as HTMLElement;
-      // If it's a text-flow element, make it focusable
-      if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
-        if (el.getAttribute('tabindex') === null) {
-          el.setAttribute('tabindex', '-1');
-        }
-      }
       firstElement = el;
       break; // Found the first element in DOM order
     }
@@ -665,6 +668,15 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
 
     // Check for shadow root
     if (element.shadowRoot) {
+      // First, make all text-flow elements in shadow DOM focusable so they're in tab order
+      const shadowAllTextFlows = element.shadowRoot.querySelectorAll('[data-janus-type="janus-text-flow"]');
+      shadowAllTextFlows.forEach((textFlow) => {
+        const el = textFlow as HTMLElement;
+        if (el.getAttribute('tabindex') === null) {
+          el.setAttribute('tabindex', '0');
+        }
+      });
+
       // Walk through shadow DOM elements in DOM order
       const shadowWalker = document.createTreeWalker(element.shadowRoot, NodeFilter.SHOW_ELEMENT, {
         acceptNode: (node) => {
@@ -697,12 +709,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       let shadowNode = shadowWalker.nextNode();
       while (shadowNode) {
         const el = shadowNode as HTMLElement;
-        // If it's a text-flow element, make it focusable
-        if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
-          if (el.getAttribute('tabindex') === null) {
-            el.setAttribute('tabindex', '-1');
-          }
-        }
         shadowFirstElement = el;
         break; // Found the first element in DOM order
       }
