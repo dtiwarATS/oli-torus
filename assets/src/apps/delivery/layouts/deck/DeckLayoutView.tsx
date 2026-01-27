@@ -611,138 +611,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     });
   }, [currentActivityTree, historyModeNavigation, reviewMode]);
 
-  // Helper function to find focusable elements, including in shadow DOM
-  const findFocusableInElement = (element: HTMLElement): HTMLElement | null => {
-    const focusableSelector =
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-    // First, make all text-flow elements focusable so they're in tab order
-    const allTextFlows = element.querySelectorAll('[data-janus-type="janus-text-flow"]');
-    allTextFlows.forEach((textFlow) => {
-      const el = textFlow as HTMLElement;
-      if (el.getAttribute('tabindex') === null) {
-        el.setAttribute('tabindex', '0');
-      }
-    });
-
-    // Walk through all elements in DOM order and find the first focusable element
-    // This ensures we respect DOM order: if input comes first, focus it; if text-flow comes first, focus it
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_ELEMENT, {
-      acceptNode: (node) => {
-        const el = node as HTMLElement;
-        // Check if it's a label
-        if (el.tagName.toLowerCase() === 'label') {
-          return NodeFilter.FILTER_ACCEPT;
-        }
-        // Check if it's a text-flow element
-        if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
-          return NodeFilter.FILTER_ACCEPT;
-        }
-        // Check if it's an interactive element
-        if (
-          (el.tagName === 'BUTTON' && !el.hasAttribute('disabled')) ||
-          (el.tagName === 'A' && el.hasAttribute('href')) ||
-          ((el.tagName === 'INPUT' ||
-            el.tagName === 'SELECT' ||
-            el.tagName === 'TEXTAREA') &&
-            !el.hasAttribute('disabled')) ||
-          (el.hasAttribute('tabindex') && el.getAttribute('tabindex') !== '-1')
-        ) {
-          return NodeFilter.FILTER_ACCEPT;
-        }
-        return NodeFilter.FILTER_SKIP;
-      },
-    });
-
-    let firstElement: HTMLElement | null = null;
-    let node = walker.nextNode();
-    while (node) {
-      const el = node as HTMLElement;
-      firstElement = el;
-      break; // Found the first element in DOM order
-    }
-
-    if (firstElement) {
-      return firstElement;
-    }
-
-    // Check for shadow root
-    if (element.shadowRoot) {
-      // First, make all text-flow elements in shadow DOM focusable so they're in tab order
-      const shadowAllTextFlows = element.shadowRoot.querySelectorAll('[data-janus-type="janus-text-flow"]');
-      shadowAllTextFlows.forEach((textFlow) => {
-        const el = textFlow as HTMLElement;
-        if (el.getAttribute('tabindex') === null) {
-          el.setAttribute('tabindex', '0');
-        }
-      });
-
-      // Walk through shadow DOM elements in DOM order
-      const shadowWalker = document.createTreeWalker(element.shadowRoot, NodeFilter.SHOW_ELEMENT, {
-        acceptNode: (node) => {
-          const el = node as HTMLElement;
-          // Check if it's a label
-          if (el.tagName.toLowerCase() === 'label') {
-            return NodeFilter.FILTER_ACCEPT;
-          }
-          // Check if it's a text-flow element
-          if (el.getAttribute('data-janus-type') === 'janus-text-flow') {
-            return NodeFilter.FILTER_ACCEPT;
-          }
-          // Check if it's an interactive element
-          if (
-            (el.tagName === 'BUTTON' && !el.hasAttribute('disabled')) ||
-            (el.tagName === 'A' && el.hasAttribute('href')) ||
-            ((el.tagName === 'INPUT' ||
-              el.tagName === 'SELECT' ||
-              el.tagName === 'TEXTAREA') &&
-              !el.hasAttribute('disabled')) ||
-            (el.hasAttribute('tabindex') && el.getAttribute('tabindex') !== '-1')
-          ) {
-            return NodeFilter.FILTER_ACCEPT;
-          }
-          return NodeFilter.FILTER_SKIP;
-        },
-      });
-
-      let shadowFirstElement: HTMLElement | null = null;
-      let shadowNode = shadowWalker.nextNode();
-      while (shadowNode) {
-        const el = shadowNode as HTMLElement;
-        shadowFirstElement = el;
-        break; // Found the first element in DOM order
-      }
-
-      if (shadowFirstElement) {
-        return shadowFirstElement;
-      }
-
-      // Also check nested custom elements in shadow root
-      const nestedCustomElements = element.shadowRoot.querySelectorAll('*');
-      for (const nested of Array.from(nestedCustomElements)) {
-        if (nested instanceof HTMLElement) {
-          const nestedFocusable = findFocusableInElement(nested);
-          if (nestedFocusable) {
-            return nestedFocusable;
-          }
-        }
-      }
-    }
-
-    // Check nested custom elements in light DOM
-    const customElements = element.querySelectorAll('*');
-    for (const customEl of Array.from(customElements)) {
-      if (customEl instanceof HTMLElement && customEl !== element) {
-        const nestedFocusable = findFocusableInElement(customEl);
-        if (nestedFocusable) {
-          return nestedFocusable;
-        }
-      }
-    }
-
-    return null;
-  };
-
   // Focus management: Move focus to content container when screen changes
   useEffect(() => {
     if (!localActivityTree || localActivityTree.length === 0) {
@@ -756,14 +624,14 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
     if (isInitialMountRef.current) {
       isInitialMountRef.current = false;
       previousActivityIdRef.current = currentActivityId;
-      previousTreeLengthRef.current = localActivityTree.length;
+      // Don't update previousTreeLengthRef here - will be updated at end of effect
       return;
     }
 
     // Skip focus in review mode or history navigation
     if (reviewMode || historyModeNavigation) {
       previousActivityIdRef.current = currentActivityId;
-      previousTreeLengthRef.current = localActivityTree.length;
+      // Don't update previousTreeLengthRef here - will be updated at end of effect
       return;
     }
 
@@ -782,35 +650,18 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
                   contentRef.current.querySelectorAll('oli-adaptive-delivery');
                 const lastElement = adaptiveElements[adaptiveElements.length - 1] as HTMLElement;
                 if (lastElement) {
-                  // Find and focus the first focusable element inside the subscreen
-                  const attemptFocus = (retries = 3) => {
-                    const firstFocusable = findFocusableInElement(lastElement);
-                    if (firstFocusable) {
-                      firstFocusable.focus();
-                      lastElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-                      // Verify focus worked
-                      if (document.activeElement === firstFocusable) {
-                        return true;
-                      }
-                    }
-
-                    // Retry if attempts remaining
-                    if (retries > 0) {
-                      setTimeout(() => attemptFocus(retries - 1), 50);
-                      return false;
-                    }
-                    return false;
-                  };
-
-                  attemptFocus();
+                  // Make the element focusable if it isn't already
+                  if (lastElement.getAttribute('tabindex') === null) {
+                    lastElement.setAttribute('tabindex', '-1');
+                  }
+                  lastElement.focus();
+                  lastElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
               }
             });
           });
         }, 100);
-        previousTreeLengthRef.current = localActivityTree.length;
-        previousActivityIdRef.current = currentActivityId;
+        // Refs will be updated at end of effect
         return;
       }
 
@@ -820,63 +671,33 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
           requestAnimationFrame(() => {
             // Verify ref exists and content is rendered before focusing
             if (contentRef.current) {
-              // Find the first focusable element in the content container (topmost element)
-              const attemptFocus = (retries = 3) => {
-                // First, try to find focusable in the first adaptive element (topmost screen)
-                const adaptiveElements =
-                  contentRef.current!.querySelectorAll('oli-adaptive-delivery');
-                const firstAdaptiveElement = adaptiveElements[0] as HTMLElement;
+              // Focus the first adaptive element (topmost screen)
+              const adaptiveElements = contentRef.current.querySelectorAll('oli-adaptive-delivery');
+              const firstAdaptiveElement = adaptiveElements[0] as HTMLElement;
 
-                if (firstAdaptiveElement) {
-                  const firstFocusable = findFocusableInElement(firstAdaptiveElement);
-                  if (firstFocusable) {
-                    firstFocusable.focus();
-                    // Scroll to top of content
-                    contentRef.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-                    // Verify focus worked
-                    if (document.activeElement === firstFocusable) {
-                      return true;
-                    }
-                  }
+              if (firstAdaptiveElement) {
+                // Make the element focusable if it isn't already
+                if (firstAdaptiveElement.getAttribute('tabindex') === null) {
+                  firstAdaptiveElement.setAttribute('tabindex', '-1');
                 }
-
-                // If no focusable element found in adaptive elements, try direct query in content
-                const focusableSelector =
-                  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-                const directFocusable = contentRef.current!.querySelector(
-                  focusableSelector,
-                ) as HTMLElement;
-                if (directFocusable) {
-                  directFocusable.focus();
-                  contentRef.current!.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  if (document.activeElement === directFocusable) {
-                    return true;
-                  }
-                }
-
+                firstAdaptiveElement.focus();
+                // Don't scroll for full screen navigation - let it start from top naturally
+              } else {
                 // Fallback: focus the content container itself
-                if (contentRef.current) {
-                  contentRef.current.focus();
-                  contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-
-                // Retry if attempts remaining
-                if (retries > 0) {
-                  setTimeout(() => attemptFocus(retries - 1), 50);
-                  return false;
-                }
-                return false;
-              };
-
-              attemptFocus();
+                contentRef.current.focus();
+                // Don't scroll for full screen navigation - let it start from top naturally
+              }
             }
           });
         });
       }, 100);
-      previousTreeLengthRef.current = localActivityTree.length;
-      previousActivityIdRef.current = currentActivityId;
+      // Refs will be updated at end of effect
     }
+
+    // Always update refs at the end to ensure they're in sync with current state
+    // This ensures refs are correct even if focus was skipped or navigation didn't occur
+    previousTreeLengthRef.current = localActivityTree.length;
+    previousActivityIdRef.current = currentActivityId;
   }, [localActivityTree, reviewMode, historyModeNavigation]);
 
   const renderActivities = useCallback(() => {
