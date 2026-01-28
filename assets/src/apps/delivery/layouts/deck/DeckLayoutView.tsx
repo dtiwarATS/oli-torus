@@ -655,7 +655,6 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
                     lastElement.setAttribute('tabindex', '-1');
                   }
                   lastElement.focus();
-                  lastElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }
               }
             });
@@ -681,11 +680,9 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
                   firstAdaptiveElement.setAttribute('tabindex', '-1');
                 }
                 firstAdaptiveElement.focus();
-                // Don't scroll for full screen navigation - let it start from top naturally
               } else {
                 // Fallback: focus the content container itself
                 contentRef.current.focus();
-                // Don't scroll for full screen navigation - let it start from top naturally
               }
             }
           });
