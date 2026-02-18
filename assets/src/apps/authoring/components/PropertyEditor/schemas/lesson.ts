@@ -26,7 +26,7 @@ const lessonSchema: JSONSchema7 = {
         },
         Appearance: {
           type: 'object',
-          title: 'Lesson Appearance',
+          title: 'Theme',
           properties: {
             theme: {
               anyOf: [
@@ -39,16 +39,16 @@ const lessonSchema: JSONSchema7 = {
                   ],
                   default: '/css/delivery_adaptive_themes_default_light.css',
                 },
-                { type: 'string', title: 'Custom Theme' },
+                { type: 'string', title: 'Custom Theme URL' },
               ],
             },
             customCssUrl: {
               type: 'string',
-              title: 'Custom CSS URL',
+              title: 'Custom Theme URL',
             },
             responsiveLayout: {
               type: 'boolean',
-              title: 'Responsive Layout',
+              title: 'Enable Responsive Layout',
               description: 'Use responsive layout for parts instead of fixed positioning',
               default: false,
             },
@@ -62,7 +62,7 @@ const lessonSchema: JSONSchema7 = {
             },
             displayApplicationChrome: {
               type: 'boolean',
-              title: 'Display Torus Navigation',
+              title: 'Display Torus Interface',
               default: 'false',
             },
             darkModeSetting: {
@@ -76,23 +76,23 @@ const lessonSchema: JSONSchema7 = {
           type: 'object',
           properties: {
             logoutMessage: {
-              title: 'Message',
+              title: 'Finish Panel Message',
               type: 'string',
               format: 'textarea',
             },
             logoutPanelImageURL: {
               type: 'string',
-              title: 'Background URL',
+              title: 'Finish Panel Background URL',
             },
           },
         },
         enableHistory: {
-          title: 'Enable History',
+          title: 'Enable Lesson History',
           type: 'boolean',
         },
         displayRefreshWarningPopup: {
           type: 'boolean',
-          title: 'Refresh warning popup',
+          title: 'Enable Refresh Warning Popup',
           default: 'true',
         },
         customCSS: {
@@ -178,7 +178,7 @@ export const simpleLessonSchema: JSONSchema7 = {
           properties: {
             displayApplicationChrome: {
               type: 'boolean',
-              title: 'Display Torus Navigation',
+              title: 'Display Torus Interface',
               default: 'false',
             },
             darkModeSetting: {
@@ -193,19 +193,19 @@ export const simpleLessonSchema: JSONSchema7 = {
           type: 'object',
           properties: {
             logoutMessage: {
-              title: 'Message',
+              title: 'Finish Panel Message',
               type: 'string',
               format: 'textarea',
             },
           },
         },
         enableHistory: {
-          title: 'Enable History',
+          title: 'Enable Lesson History',
           type: 'boolean',
         },
         displayRefreshWarningPopup: {
           type: 'boolean',
-          title: 'Refresh warning popup',
+          title: 'Enable Refresh Warning Popup',
           default: 'true',
         },
         InterfaceSettings: {
@@ -267,12 +267,11 @@ export const lessonUiSchema: UiSchema = {
     },
     Appearance: {
       'ui:ObjectFieldTemplate': CustomFieldTemplate,
-      'ui:title': 'Lesson Appearance',
+      'ui:title': 'Theme',
       backgroundImageURL: {
         'ui:widget': 'TorusImageBrowser',
       },
       responsiveLayout: {
-        'ui:title': 'Enable Responsive Layout',
         classNames: 'col-span-12',
       },
     },
