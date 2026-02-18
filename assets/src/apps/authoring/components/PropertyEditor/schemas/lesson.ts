@@ -100,6 +100,7 @@ const lessonSchema: JSONSchema7 = {
     AuthorInterfaceTools: {
       type: 'object',
       title: 'Author Interface Tools',
+      description: 'Grids and guides to help with formatting. These are never visible to students.',
       properties: {
         grid: {
           type: 'boolean',
