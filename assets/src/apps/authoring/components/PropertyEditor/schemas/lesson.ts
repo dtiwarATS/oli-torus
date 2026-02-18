@@ -29,22 +29,13 @@ const lessonSchema: JSONSchema7 = {
           title: 'Theme',
           properties: {
             theme: {
-              anyOf: [
-                {
-                  type: 'string',
-                  title: 'Default Theme',
-                  enum: [
-                    '/css/delivery_adaptive_themes_default_light.css',
-                    '/css/delivery_adaptive_themes_flowchart.css',
-                  ],
-                  default: '/css/delivery_adaptive_themes_default_light.css',
-                },
-                { type: 'string', title: 'Custom Theme URL' },
-              ],
+              type: 'string',
+              title: 'Theme',
+              default: '/css/delivery_adaptive_themes_default_light.css',
             },
             customCssUrl: {
               type: 'string',
-              title: 'Custom Theme URL',
+              title: 'Custom CSS URL',
             },
             responsiveLayout: {
               type: 'boolean',
@@ -268,6 +259,9 @@ export const lessonUiSchema: UiSchema = {
     Appearance: {
       'ui:ObjectFieldTemplate': CustomFieldTemplate,
       'ui:title': 'Theme',
+      theme: {
+        'ui:widget': 'ThemeSelectorWidget',
+      },
       backgroundImageURL: {
         'ui:widget': 'TorusImageBrowser',
       },
@@ -308,7 +302,7 @@ export const lessonUiSchema: UiSchema = {
 // };
 
 export const transformModelToSchema = (model: any) => {
-  const [themeUrl, customCssUrl] = model.additionalStylesheets;
+  const [themeUrl, customCssUrl] = model.additionalStylesheets || [];
 
   return {
     Properties: {
