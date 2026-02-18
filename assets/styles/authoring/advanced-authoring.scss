@@ -223,9 +223,18 @@ $font-family-sans-serif: var(--font-sans);
     .form-group {
       margin-bottom: 0.75rem;
     }
-    .form-label {
+    .form-label,
+    .form-group label,
+    .grid label,
+    .inner label {
       font-weight: 700;
+      font-size: 14px;
       margin-bottom: 0.25rem;
+    }
+    .form-text,
+    .text-muted {
+      font-size: 12px;
+      font-weight: 400;
     }
     .form-control {
       font-size: 12px;
@@ -265,6 +274,24 @@ $font-family-sans-serif: var(--font-sans);
 
           .collapse.show {
             margin-top: 10px;
+          }
+          h6 {
+            font-weight: 700;
+            font-size: 14px;
+          }
+          .form-label,
+          .form-group label,
+          label.form-label,
+          .grid label,
+          .inner label {
+            font-weight: 700;
+            font-size: 14px;
+          }
+          .form-text,
+          .text-muted,
+          small {
+            font-size: 12px;
+            font-weight: 400;
           }
           .read-only .form-control {
             background-color: #e9ecef; /* light gray like disabled */
@@ -368,6 +395,7 @@ $font-family-sans-serif: var(--font-sans);
     .title {
       font-weight: 700;
       text-transform: uppercase;
+      font-size: 16px;
     }
     .ruleName {
       display: inline-block;
@@ -797,6 +825,7 @@ $font-family-sans-serif: var(--font-sans);
   h5,
   h6 {
     font-weight: bold;
+    font-size: 14px;
   }
 }
 .modal-dialog.config-modal {
