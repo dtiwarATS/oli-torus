@@ -19,6 +19,7 @@ import { SpokeCompletedOption } from './custom/SpokeCompletedOption';
 import { SpokeCustomErrorFeedbackAuthoring } from './custom/SpokeCustomErrorFeedbackAuthoring';
 import { SpokeOptionsEditor } from './custom/SpokeOptionsEditor';
 import ThemeSelectorWidget from './custom/ThemeSelectorWidget';
+import TooltipFieldTemplate from './custom/TooltipFieldTemplate';
 import { TorusAudioBrowser } from './custom/TorusAudioBrowser';
 import { TorusImageBrowser } from './custom/TorusImageBrowser';
 import { TorusVideoBrowser } from './custom/TorusVideoBrowser';

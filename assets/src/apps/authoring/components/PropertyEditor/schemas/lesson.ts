@@ -2,6 +2,7 @@ import { UiSchema } from '@rjsf/core';
 import { JSONSchema7 } from 'json-schema';
 import AccordionTemplate from '../custom/AccordionTemplate';
 import CustomFieldTemplate from '../custom/CustomFieldTemplate';
+import TooltipFieldTemplate from '../custom/TooltipFieldTemplate';
 import { CUSTOM_THEME_SENTINEL } from '../custom/ThemeSelectorWidget';
 import VariableEditor, { FieldTemplate, ObjectFieldTemplate } from '../custom/VariableEditor';
 
@@ -273,6 +274,8 @@ export const lessonUiSchema: UiSchema = {
     },
     responsiveLayout: {
       classNames: 'col-span-12',
+      'ui:tooltip': 'Automatically arranges components in full or half-width rows and adjusts layout to fit different screen sizes. When off, components must be positioned manually and do not resize.',
+      'ui:FieldTemplate': TooltipFieldTemplate,
     },
   },
   LessonAppearance: {
@@ -280,12 +283,28 @@ export const lessonUiSchema: UiSchema = {
     theme: {
       'ui:widget': 'ThemeSelectorWidget',
     },
+    darkModeSetting: {
+      'ui:tooltip': 'Allows the lesson to support both light and dark themes. Recommended only when using custom or external styles that include dark mode styling.',
+      'ui:FieldTemplate': TooltipFieldTemplate,
+    },
     backgroundImageURL: {
       'ui:widget': 'TorusImageBrowser',
     },
   },
   NavigationBehavior: {
     'ui:ObjectFieldTemplate': AccordionTemplate,
+    displayApplicationChrome: {
+      'ui:tooltip': 'Displays the full Torus interface (header and course controls) around the lesson. When off (default), the lesson runs in standalone full-screen mode.',
+      'ui:FieldTemplate': TooltipFieldTemplate,
+    },
+    enableHistory: {
+      'ui:tooltip': 'Allows students to revisit previously completed screens in read-only mode to review their responses. When off, students can only move forward through the lesson.',
+      'ui:FieldTemplate': TooltipFieldTemplate,
+    },
+    displayRefreshWarningPopup: {
+      'ui:tooltip': 'Displays a warning if students refresh the page or try to leave the lesson before completing a screen or saving their answers.',
+      'ui:FieldTemplate': TooltipFieldTemplate,
+    },
     FinishPanel: {
       'ui:ObjectFieldTemplate': CustomFieldTemplate,
     },
