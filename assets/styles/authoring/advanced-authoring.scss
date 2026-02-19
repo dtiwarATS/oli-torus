@@ -283,6 +283,11 @@ $font-family-sans-serif: var(--font-sans);
     .screen-tab,
     .bank-tab,
     .component-tab {
+      .custom-field-title,
+      h6.custom-field-title {
+        font-weight: 700;
+        font-size: 14px;
+      }
       .container-fluid > .row {
         border-bottom: 1px solid $ui-border-color;
 
