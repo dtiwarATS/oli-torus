@@ -261,6 +261,14 @@ $font-family-sans-serif: var(--font-sans);
         font-weight: 700;
         font-size: 14px;
       }
+      .theme-field-block {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .theme-field-block label {
+        margin-bottom: 0.25rem;
+      }
       .container-fluid > .row {
         margin-bottom: 0px !important;
 
@@ -439,7 +447,7 @@ $font-family-sans-serif: var(--font-sans);
 
     .title {
       font-weight: 700;
-      text-transform: uppercase;
+      text-transform: capitalize;
       font-size: 16px;
     }
     .ruleName {
@@ -729,7 +737,7 @@ $font-family-sans-serif: var(--font-sans);
   .aa-panel-tabs {
     flex-wrap: inherit;
     padding: 0 16px;
-    text-transform: uppercase;
+    text-transform: capitalize;
     font-weight: 700;
 
     .nav-link {
@@ -801,7 +809,7 @@ $font-family-sans-serif: var(--font-sans);
     justify-content: space-between;
     align-items: center;
     font-weight: 700;
-    text-transform: uppercase;
+    text-transform: capitalize;
   }
   .target-select-container {
     background-color: $panel-bg-color-light;
@@ -907,7 +915,7 @@ $font-family-sans-serif: var(--font-sans);
 
     .title {
       font-weight: 700;
-      text-transform: uppercase;
+      text-transform: capitalize;
     }
   }
   .modal-footer {
