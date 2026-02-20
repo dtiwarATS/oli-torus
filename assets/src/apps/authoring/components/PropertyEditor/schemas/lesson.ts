@@ -281,8 +281,7 @@ export const lessonUiSchema: UiSchema = {
   LessonAppearance: {
     'ui:ObjectFieldTemplate': AccordionTemplate,
     theme: {
-      'ui:widget': 'ThemeSelectorWidget',
-      classNames: 'col-span-12 theme-field-block',
+      'ui:widget': 'ThemeSelectorWidget'
     },
     darkModeSetting: {
       'ui:tooltip': 'Allows the lesson to support both light and dark themes. Recommended only when using custom or external styles that include dark mode styling.',
