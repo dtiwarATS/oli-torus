@@ -10,6 +10,15 @@
   .activity-content {
     border: none !important;
   }
+
+  // Remove bottom padding from all but last activity, and top padding from all but first,
+  // so the gap between parent and child screens is exactly one 20px spacer
+  > *:not(:last-child) .advance-authoring-responsive-layout {
+    padding-bottom: 0 !important;
+  }
+  > *:not(:first-child) .advance-authoring-responsive-layout {
+    padding-top: 0 !important;
+  }
 }
 
 .advance-authoring-responsive-layout {
