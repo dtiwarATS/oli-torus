@@ -269,7 +269,10 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
         base_project: project,
         title: "The best course ever! (unscheduled version)",
         start_date: ~U[2023-10-30 20:00:00Z],
-        analytics_version: :v2
+        analytics_version: :v2,
+        open_and_free: true,
+        lti_1p3_deployment: nil,
+        lti_1p3_deployment_id: nil
       )
 
     {:ok, section} = Sections.create_section_resources(section, publication)
@@ -707,7 +710,14 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
 
   describe "user" do
     test "can not access page when it is not logged in", %{conn: conn} do
-      section = insert(:section)
+      section =
+        insert(:section,
+          open_and_free: true,
+          requires_enrollment: true,
+          lti_1p3_deployment: nil,
+          lti_1p3_deployment_id: nil
+        )
+
       student = insert(:user)
 
       Sections.enroll(student.id, section.id, [ContextRoles.get_role(:context_learner)])
@@ -721,7 +731,14 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
 
     test "can not access when not enrolled to course", context do
       {:ok, conn: conn, user: _user} = user_conn(context)
-      section = insert(:section, requires_enrollment: true)
+
+      section =
+        insert(:section,
+          requires_enrollment: true,
+          open_and_free: true,
+          lti_1p3_deployment: nil,
+          lti_1p3_deployment_id: nil
+        )
 
       {:error, {:redirect, %{to: redirect_path, flash: _flash_msg}}} =
         live(conn, ~p"/sections/#{section.slug}")
@@ -735,7 +752,8 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
 
       {:ok, _user} = Accounts.update_user(student, %{research_opt_out: nil})
 
-      section = insert(:section)
+      section =
+        insert(:section, open_and_free: true, lti_1p3_deployment: nil, lti_1p3_deployment_id: nil)
 
       Sections.enroll(student.id, section.id, [ContextRoles.get_role(:context_learner)])
 
@@ -752,7 +770,8 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
 
       {:ok, _user} = Accounts.update_user(student, %{research_opt_out: nil})
 
-      section = insert(:section)
+      section =
+        insert(:section, open_and_free: true, lti_1p3_deployment: nil, lti_1p3_deployment_id: nil)
 
       Sections.enroll(student.id, section.id, [ContextRoles.get_role(:context_learner)])
 
@@ -793,6 +812,25 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
 
       assert has_element?(view, "span", "The best course ever!")
       assert has_element?(view, "div", "Upcoming Agenda")
+    end
+
+    test "shows due info for upcoming assignments when only end_date is set", %{
+      conn: conn,
+      section: section,
+      page_3: page_3
+    } do
+      stub_current_time(~U[2023-11-04 20:00:00Z])
+
+      Sections.get_section_resource(section.id, page_3.resource_id)
+      |> Sections.update_section_resource(%{
+        start_date: nil,
+        end_date: ~U[2023-11-04 20:00:00Z],
+        scheduling_type: :due_by
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/sections/#{section.slug}")
+
+      assert has_element?(view, "div#home-assignments", "Due Today")
     end
 
     test "renders paywall message when grace period is not over (or gets redirected when over)",
@@ -1720,7 +1758,10 @@ defmodule OliWeb.Delivery.Student.IndexLiveTest do
         insert(:section,
           base_project: project,
           title: "Another course!",
-          analytics_version: :v2
+          analytics_version: :v2,
+          open_and_free: true,
+          lti_1p3_deployment: nil,
+          lti_1p3_deployment_id: nil
         )
 
       {:ok, section} = Sections.create_section_resources(section, publication)
