@@ -1,9 +1,4 @@
-// In authoring stack layout (parent + child screens), each activity should size to content so child renders immediately after parent
-.activity-stack-container .advance-authoring-responsive-layout {
-  min-height: 0;
-}
-
-// Wrap all stacked activities in a single border; remove individual activity-content borders
+// Authoring stack layout: single border, no per-activity borders, tight spacing between screens
 .activity-stack-container {
   border: 1px solid #ccc;
 
@@ -11,8 +6,10 @@
     border: none !important;
   }
 
-  // Remove bottom padding from all but last activity, and top padding from all but first,
-  // so the gap between parent and child screens is exactly one 20px spacer
+  .advance-authoring-responsive-layout {
+    min-height: 0;
+  }
+
   > *:not(:last-child) .advance-authoring-responsive-layout {
     padding-bottom: 0 !important;
   }
