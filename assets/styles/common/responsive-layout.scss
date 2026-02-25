@@ -1,3 +1,8 @@
+// In authoring stack layout (parent + child screens), each activity should size to content so child renders immediately after parent
+.activity-stack-container .advance-authoring-responsive-layout {
+  min-height: 0;
+}
+
 .advance-authoring-responsive-layout {
   display: block;
   width: 100%;
@@ -245,6 +250,11 @@
 
 .responsive-layout-section .content {
   box-sizing: border-box;
+}
+
+// Multi-activity tree (parent + subscreen): allow each activity to size to content so subscreen sits directly below parent
+.responsive-layout-section .content.activity-tree-stack > * {
+  min-height: 0;
 }
 
 // Ensure the responsive layout container uses box-sizing
