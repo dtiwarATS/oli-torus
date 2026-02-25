@@ -50,6 +50,7 @@ const csrfToken = (document as any)
 const liveSocket = new LiveSocket('/live', Socket, {
   hooks: Hooks,
   params: { _csrf_token: csrfToken },
+  debug: false,
   timeout: 60000,
   metadata: {
     keydown: (e: any, _el: any) => {
@@ -119,6 +120,22 @@ const confirmAction = (
   }
 };
 
+// Function to handle cookie preferences based on device type
+const handleCookiePreferences = (privacyPoliciesUrl: string) => {
+  // Use server-side device detection for consistent behavior
+  const isMobile = (window as any).isMobileOrTablet || window.innerWidth <= 768; // fallback
+
+  if (isMobile) {
+    // On mobile/tablet, navigate to LiveView with current page as return_to
+    const currentPath = window.location.pathname + window.location.search;
+    const encodedReturnTo = encodeURIComponent(currentPath);
+    window.location.href = `/cookie-preferences?return_to=${encodedReturnTo}`;
+  } else {
+    // On desktop, show React modal
+    selectCookiePreferences({ privacyPoliciesUrl });
+  }
+};
+
 // Global functions and objects:
 window.OLI = {
   initActivityBridge,
@@ -128,6 +145,7 @@ window.OLI = {
   enableSubmitWhenTitleMatches,
   selectCookieConsent,
   selectCookiePreferences,
+  handleCookiePreferences,
   retrieveCookies,
   onReady,
   finalize,
@@ -153,8 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
     .call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
     .map((el: HTMLElement) => new Tooltip(el));
 
-  // initialize command button elements
-  $('[data-action="command-button"]').on('click', commandButtonClicked);
+  // initialize command button elements (delegated so LiveView-patched content works too)
+  $(document).on('click', '[data-action="command-button"]', commandButtonClicked);
 
   // handle direct tab routing via url hash
   if (location.hash !== '') {
@@ -233,6 +251,7 @@ declare global {
       enableSubmitWhenTitleMatches: typeof enableSubmitWhenTitleMatches;
       selectCookieConsent: typeof selectCookieConsent;
       selectCookiePreferences: typeof selectCookiePreferences;
+      handleCookiePreferences: typeof handleCookiePreferences;
       retrieveCookies: typeof retrieveCookies;
       onReady: typeof onReady;
       finalize: typeof finalize;

@@ -14,7 +14,9 @@ defmodule OliWeb.Endpoint do
     longpoll: false
   )
 
-  socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
+  socket("/live", Phoenix.LiveView.Socket,
+    websocket: [connect_info: [:user_agent, session: @session_options]]
+  )
 
   # Serve at "/" the static files from "priv/static" directory.
   #
@@ -25,7 +27,7 @@ defmodule OliWeb.Endpoint do
     from: :oli,
     gzip: true,
     only:
-      ~w(assets css fonts images js custom branding vlab favicon.ico robots.txt flame_graphs ebsco)
+      ~w(assets css fonts images js custom branding vlab favicon.ico robots.txt flame_graphs ebsco superactivity)
   )
 
   plug Plug.Static, at: "/schemas", from: {:oli, "priv/schemas"}, gzip: true

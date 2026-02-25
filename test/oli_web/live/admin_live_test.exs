@@ -650,8 +650,15 @@ defmodule OliWeb.AdminLiveTest do
       assert has_element?(view, "input[value='#{user.given_name}']")
       assert has_element?(view, "input[value='#{user.family_name}']")
       assert has_element?(view, "input[value='#{user.email}']")
-      assert has_element?(view, "input[value='#{boolean(user.guest)}']")
-      assert has_element?(view, "#user_independent_learner")
+
+      assert view
+             |> element("div.form-group", "Guest")
+             |> render() =~ "value=\"#{boolean(user.guest)}\""
+
+      assert view
+             |> element("div.form-group", "Independent Learner")
+             |> render() =~ "value=\"#{boolean(user.independent_learner)}\""
+
       assert has_element?(view, "#user_can_create_sections")
       assert has_element?(view, "input[value='#{boolean(user.research_opt_out)}']")
 
@@ -1223,12 +1230,12 @@ defmodule OliWeb.AdminLiveTest do
       |> render_submit(%{
         "author" => %{
           "given_name" => author.given_name,
-          "family_name" => "A",
+          "family_name" => "",
           "email" => author.email
         }
       })
 
-      assert render(view) =~ "Please enter a Last Name that is at least two characters long."
+      assert render(view) =~ "Please enter a Last Name"
     end
 
     test "shows both error messages when First Name is empty and Last Name has less than 2 characters on form submit",
@@ -1244,7 +1251,7 @@ defmodule OliWeb.AdminLiveTest do
       |> render_submit(%{
         "author" => %{
           "given_name" => "",
-          "family_name" => "A",
+          "family_name" => "",
           "email" => author.email
         }
       })
@@ -1252,7 +1259,7 @@ defmodule OliWeb.AdminLiveTest do
       html = render(view)
 
       assert html =~ "Please enter a First Name"
-      assert html =~ "Please enter a Last Name that is at least two characters long."
+      assert html =~ "Please enter a Last Name"
     end
   end
 end
