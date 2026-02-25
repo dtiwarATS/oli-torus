@@ -53,7 +53,6 @@ const AuthoringActivityRenderer: React.FC<AuthoringActivityRendererProps> = ({
       ? {
           position: 'relative' as const,
           width: '100%',
-          marginBottom: '24px',
           pointerEvents: `${editMode ? 'auto' : 'none'}`,
         }
       : {

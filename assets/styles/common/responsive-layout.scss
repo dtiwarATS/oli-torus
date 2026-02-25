@@ -3,6 +3,15 @@
   min-height: 0;
 }
 
+// Wrap all stacked activities in a single border; remove individual activity-content borders
+.activity-stack-container {
+  border: 1px solid #ccc;
+
+  .activity-content {
+    border: none !important;
+  }
+}
+
 .advance-authoring-responsive-layout {
   display: block;
   width: 100%;
