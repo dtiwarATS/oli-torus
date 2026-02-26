@@ -732,8 +732,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
         },${config?.palette?.fillAlpha})`;
       }
     }
-    const multiActivityTree =
-      responsiveLayout && localActivityTree.length > 1;
+    const multiActivityTree = responsiveLayout && localActivityTree.length > 1;
     if (multiActivityTree) {
       styles.display = 'flex';
       styles.flexDirection = 'column';
@@ -786,9 +785,7 @@ const DeckLayoutView: React.FC<LayoutProps> = ({ pageTitle, pageContent, preview
       );
     });
 
-    const contentClassName = multiActivityTree
-      ? 'content activity-tree-stack'
-      : 'content';
+    const contentClassName = multiActivityTree ? 'content activity-tree-stack' : 'content';
 
     return (
       <div ref={contentRef} className={contentClassName} tabIndex={-1} style={styles}>

@@ -203,7 +203,7 @@ const EditingCanvas: React.FC = () => {
 
   const configEditorId = `config-editor-${currentActivityId}`;
   const stackLayout =
-    (currentActivityTree?.length ?? 0) > 1 && (_currentLessonCustom?.responsiveLayout === true);
+    (currentActivityTree?.length ?? 0) > 1 && _currentLessonCustom?.responsiveLayout === true;
 
   const activityRenderers =
     currentActivityTree &&
