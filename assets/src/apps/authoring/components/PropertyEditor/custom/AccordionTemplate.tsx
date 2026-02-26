@@ -16,7 +16,10 @@ const AccordionTemplate: React.FC<ObjectFieldTemplateProps> = (props) => {
         <div className="grid grid-cols-12 mx-4">
           {props.description && props.DescriptionField && (
             <div className="col-span-12 mb-2">
-              <props.DescriptionField id={`${props.idSchema.$id}-description`} description={props.description} />
+              <props.DescriptionField
+                id={`${props.idSchema.$id}-description`}
+                description={props.description}
+              />
             </div>
           )}
           {props.properties.map((element: any) => (

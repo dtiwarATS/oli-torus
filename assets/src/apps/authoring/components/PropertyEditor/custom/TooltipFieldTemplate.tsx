@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
 import { Form } from 'react-bootstrap';
 import { OverlayTrigger, Tooltip } from 'react-bootstrap';
+import ReactDOM from 'react-dom';
 import { FieldTemplateProps } from '@rjsf/core';
 
 const TooltipFieldTemplate: React.FC<FieldTemplateProps> = (props) => {
@@ -43,7 +43,12 @@ const TooltipFieldTemplate: React.FC<FieldTemplateProps> = (props) => {
         if (attemptCount < maxAttempts) {
           setTimeout(tryInjectIcon, 100);
         } else {
-          console.log('TooltipFieldTemplate: Container not found after', maxAttempts, 'attempts for', props.id);
+          console.log(
+            'TooltipFieldTemplate: Container not found after',
+            maxAttempts,
+            'attempts for',
+            props.id,
+          );
         }
         return;
       }
@@ -58,15 +63,23 @@ const TooltipFieldTemplate: React.FC<FieldTemplateProps> = (props) => {
       }
       // Also try searching in parent elements
       if (!label && container.parentElement) {
-        label = container.parentElement.querySelector('label.form-label') ||
-                container.parentElement.querySelector('label');
+        label =
+          container.parentElement.querySelector('label.form-label') ||
+          container.parentElement.querySelector('label');
       }
 
       if (!label) {
         if (attemptCount < maxAttempts) {
           setTimeout(tryInjectIcon, 100);
         } else {
-          console.log('TooltipFieldTemplate: Label not found after', maxAttempts, 'attempts for', props.id, 'container HTML:', container.outerHTML.substring(0, 200));
+          console.log(
+            'TooltipFieldTemplate: Label not found after',
+            maxAttempts,
+            'attempts for',
+            props.id,
+            'container HTML:',
+            container.outerHTML.substring(0, 200),
+          );
         }
         return;
       }
@@ -100,12 +113,9 @@ const TooltipFieldTemplate: React.FC<FieldTemplateProps> = (props) => {
             </Tooltip>
           }
         >
-          <i
-            className="fa fa-info-circle tooltip-info-icon"
-            aria-label="More information"
-          />
+          <i className="fa fa-info-circle tooltip-info-icon" aria-label="More information" />
         </OverlayTrigger>,
-        iconContainer
+        iconContainer,
       );
     };
 
@@ -136,7 +146,9 @@ const TooltipFieldTemplate: React.FC<FieldTemplateProps> = (props) => {
     <div ref={containerRef} id={props.id}>
       {props.children}
     </div>
-  ) : props.children;
+  ) : (
+    props.children
+  );
 
   return (
     <Form.Group className="mb-0" ref={containerRef} id={props.id}>

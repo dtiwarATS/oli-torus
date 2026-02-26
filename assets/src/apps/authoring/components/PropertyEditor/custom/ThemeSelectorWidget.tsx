@@ -39,14 +39,11 @@ const ThemeSelectorWidget: React.FC<ThemeSelectorWidgetProps> = ({
   };
 
   const showCustomUrlInput = !isDefault;
-  const customUrlValue =
-    showCustomUrlInput && value !== CUSTOM_THEME_SENTINEL ? value : '';
+  const customUrlValue = showCustomUrlInput && value !== CUSTOM_THEME_SENTINEL ? value : '';
 
   return (
-    <Form.Group  style={{ marginTop: '8px' }}>
-       <Form.Label htmlFor={`${id}-custom-url`}>
-             Theme
-          </Form.Label>
+    <Form.Group style={{ marginTop: '8px' }}>
+      <Form.Label htmlFor={`${id}-custom-url`}>Theme</Form.Label>
       <Form.Control
         as="select"
         id={id}
@@ -54,7 +51,6 @@ const ThemeSelectorWidget: React.FC<ThemeSelectorWidgetProps> = ({
         onChange={handleChange}
         onFocus={onFocus}
         style={{ marginBottom: '13px' }}
-
       >
         <option value="default">Default Theme</option>
         <option value="custom">Custom Theme</option>
