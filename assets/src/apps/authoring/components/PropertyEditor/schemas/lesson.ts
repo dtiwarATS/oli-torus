@@ -2,7 +2,7 @@ import { UiSchema } from '@rjsf/core';
 import { JSONSchema7 } from 'json-schema';
 import AccordionTemplate from '../custom/AccordionTemplate';
 import CustomFieldTemplate from '../custom/CustomFieldTemplate';
-import { CUSTOM_THEME_SENTINEL } from '../custom/ThemeSelectorWidget';
+import { CUSTOM_THEME_DEFAULT } from '../custom/ThemeSelectorWidget';
 import TooltipFieldTemplate from '../custom/TooltipFieldTemplate';
 import VariableEditor, { FieldTemplate, ObjectFieldTemplate } from '../custom/VariableEditor';
 
@@ -363,7 +363,7 @@ export const lessonUiSchema: UiSchema = {
 export const transformModelToSchema = (model: any) => {
   const [themeUrl, customCssUrl] = model.additionalStylesheets || [];
   const isDefaultTheme = themeUrl === DEFAULT_THEME_URL || !themeUrl;
-  const theme = isDefaultTheme ? DEFAULT_THEME_URL : themeUrl || CUSTOM_THEME_SENTINEL;
+  const theme = isDefaultTheme ? DEFAULT_THEME_URL : themeUrl || CUSTOM_THEME_DEFAULT;
   const formCustomCssUrl = customCssUrl || '';
 
   return {
@@ -408,9 +408,9 @@ export const transformSchemaToModel = (schema: any) => {
   const appearanceTheme = schema.LessonAppearance?.theme;
   const customCssUrl = schema.LessonAppearance?.customCssUrl;
   const additionalStylesheets =
-    appearanceTheme === CUSTOM_THEME_SENTINEL
+    appearanceTheme === CUSTOM_THEME_DEFAULT
       ? [customCssUrl].filter(Boolean)
-      : [appearanceTheme, customCssUrl].filter((url) => url && url !== CUSTOM_THEME_SENTINEL);
+      : [appearanceTheme, customCssUrl].filter((url) => url && url !== CUSTOM_THEME_DEFAULT);
 
   const responsiveLayout = schema.Properties?.responsiveLayout;
   // When responsiveLayout is true, width is treated as maxWidth

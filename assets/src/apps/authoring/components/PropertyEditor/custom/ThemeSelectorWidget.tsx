@@ -3,7 +3,7 @@ import { Form } from 'react-bootstrap';
 
 const DEFAULT_THEME_URL = '/css/delivery_adaptive_themes_default_light.css';
 /** Sentinel for "Custom Theme" so theme is never empty (keeps customCssUrl field visible in form). */
-export const CUSTOM_THEME_SENTINEL = '__custom_theme__';
+export const CUSTOM_THEME_DEFAULT = '__custom_theme__';
 
 interface ThemeSelectorWidgetProps {
   id: string;
@@ -29,17 +29,17 @@ const ThemeSelectorWidget: React.FC<ThemeSelectorWidgetProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const isDefaultSelected = e.target.value === 'default';
-    const next = isDefaultSelected ? DEFAULT_THEME_URL : CUSTOM_THEME_SENTINEL;
+    const next = isDefaultSelected ? DEFAULT_THEME_URL : CUSTOM_THEME_DEFAULT;
     onChange(next);
   };
 
   const handleCustomUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const customUrl = e.target.value;
-    onChange(customUrl || CUSTOM_THEME_SENTINEL);
+    onChange(customUrl || CUSTOM_THEME_DEFAULT);
   };
 
   const showCustomUrlInput = !isDefault;
-  const customUrlValue = showCustomUrlInput && value !== CUSTOM_THEME_SENTINEL ? value : '';
+  const customUrlValue = showCustomUrlInput && value !== CUSTOM_THEME_DEFAULT ? value : '';
 
   return (
     <Form.Group style={{ marginTop: '8px' }}>
