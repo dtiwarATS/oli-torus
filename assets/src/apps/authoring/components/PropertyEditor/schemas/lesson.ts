@@ -4,6 +4,7 @@ import AccordionTemplate from '../custom/AccordionTemplate';
 import CustomFieldTemplate from '../custom/CustomFieldTemplate';
 import { CUSTOM_THEME_SENTINEL } from '../custom/ThemeSelectorWidget';
 import TooltipFieldTemplate from '../custom/TooltipFieldTemplate';
+import VariableEditor, { FieldTemplate, ObjectFieldTemplate } from '../custom/VariableEditor';
 
 const DEFAULT_THEME_URL = '/css/delivery_adaptive_themes_default_light.css';
 
@@ -128,6 +129,17 @@ const lessonSchema: JSONSchema7 = {
       type: 'object',
       title: 'Advanced',
       properties: {
+        variables: {
+          type: 'array',
+          title: 'Variables',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', title: 'Name' },
+              expression: { type: 'string', title: 'Expression' },
+            },
+          },
+        },
         customCSS: {
           title: 'Custom CSS',
           type: 'string',
@@ -330,6 +342,14 @@ export const lessonUiSchema: UiSchema = {
   },
   Advanced: {
     'ui:ObjectFieldTemplate': AccordionTemplate,
+    variables: {
+      'ui:ArrayFieldTemplate': VariableEditor,
+      items: {
+        'ui:ObjectFieldTemplate': ObjectFieldTemplate,
+        name: { 'ui:FieldTemplate': FieldTemplate },
+        expression: { 'ui:FieldTemplate': FieldTemplate },
+      },
+    },
   },
 };
 
@@ -375,6 +395,7 @@ export const transformModelToSchema = (model: any) => {
       rowGuides: model.custom.rowGuides || false,
     },
     Advanced: {
+      variables: model.custom.variables,
       customCSS: model.customCss,
       customScript: model.customScript,
     },
@@ -409,6 +430,7 @@ export const transformSchemaToModel = (schema: any) => {
       backgroundImageScaleContent: schema.LessonAppearance?.backgroundImageScaleContent,
       darkModeSetting: schema.LessonAppearance?.darkModeSetting,
       responsiveLayout,
+      variables: schema.Advanced?.variables || [],
       grid: schema.AuthorInterfaceTools?.grid,
       centerpoint: schema.AuthorInterfaceTools?.centerpoint,
       columnGuides: schema.AuthorInterfaceTools?.columnGuides,
