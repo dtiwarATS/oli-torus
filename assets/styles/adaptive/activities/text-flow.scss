@@ -1,12 +1,8 @@
 html:not(html .headerContainer) {
-  font-size: 16px;
   font-family: OpenSans;
   color: var(--grayDark100);
-}
-
-janus-text-flow div * {
-  /*may not use this if a text-flow can hold more than one text type (p, h1, h2, h3...)
-  margin: 0 !important;;*/
+  font-size: 1rem;
+  line-height: 1.25rem;
 }
 
 /*-----------------------------------------
@@ -30,7 +26,6 @@ janus-text-flow h4 {
   margin-top: 2rem;
   font-family: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
   font-weight: 700;
-  color: $headerColor;
 }
 
 janus-text-flow > div > :first-child {
@@ -62,8 +57,6 @@ janus-text-flow h4 {
 -----------------------------------------*/
 janus-text-flow p {
   font-family: 'Open Sans', 'Helvetica Neue', Arial, sans-serif;
-  font-size: 1rem;
-  line-height: 1.25rem;
   margin: 0 0 1rem 0;
 }
 janus-text-flow p b,
