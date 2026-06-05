@@ -9,9 +9,7 @@ declare module 'gifuct-js' {
 
   export interface ParsedFrame {
     dims: GifFrameDims;
-    // RGBA pixel patch, present when decompressFrames is called with buildImagePatches = true.
     patch?: Uint8ClampedArray;
-    // Frame delay in milliseconds.
     delay: number;
     disposalType: number;
     transparentIndex?: number;

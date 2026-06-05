@@ -24,10 +24,6 @@ interface DecodedGif {
 type GifRenderMode = 'loading' | 'decoded' | 'fallback';
 
 // Renders an animated GIF with an accessible play/pause toggle.
-//
-// Preferred path: fetch + decode with gifuct-js and drive playback on a
-// <canvas> so pause freezes the exact current frame.
-//
 // When fetch/decode is blocked (e.g. external URLs without CORS), we fall
 // back to a native <img>. A single drawImage() at pause time copies the
 // first/poster frame per the HTML spec, so we continuously snapshot the
@@ -55,7 +51,6 @@ const GifImage: React.FC<GifImageProps> = ({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const patchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const playingRef = useRef<boolean>(true);
-  // Offscreen buffer holding the most recent snapshot of the playing <img>.
   const snapshotCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const snapshotRafRef = useRef<number | null>(null);
   const hasSnapshotRef = useRef<boolean>(false);

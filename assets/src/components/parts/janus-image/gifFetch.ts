@@ -37,9 +37,7 @@ export const buildGifFetchCandidates = (src: string): string[] => {
   const candidates: string[] = [];
 
   if (typeof window !== 'undefined' && isCrossOriginUrl(src)) {
-    candidates.push(
-      `${window.location.origin}/api/v1/gif-proxy?url=${encodeURIComponent(src)}`,
-    );
+    candidates.push(`${window.location.origin}/api/v1/gif-proxy?url=${encodeURIComponent(src)}`);
   }
 
   candidates.push(src);
@@ -54,10 +52,7 @@ export const buildGifFetchCandidates = (src: string): string[] => {
   return [...new Set(candidates)];
 };
 
-export const fetchGifBytes = async (
-  src: string,
-  signal?: AbortSignal,
-): Promise<ArrayBuffer> => {
+export const fetchGifBytes = async (src: string, signal?: AbortSignal): Promise<ArrayBuffer> => {
   const candidates = buildGifFetchCandidates(src);
   let lastError: unknown;
 

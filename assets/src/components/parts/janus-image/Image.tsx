@@ -192,8 +192,8 @@ const Image: React.FC<PartComponentProps<ImageModel>> = (props) => {
     ...(aiTriggerAvailable ? { cursor: 'pointer' } : {}),
   };
 
-  // GIFs get an accessible play/pause toggle (WCAG 2.1 SC 2.2.2). Static
-  // images keep rendering as a plain <img> with no UI or layout changes.
+  // GIFs get an accessible play/pause toggle
+  // Static images keep rendering as a plain <img> with no UI or layout changes.
   if (isAnimatedGifSource(imgSrc)) {
     return (
       <GifImage
