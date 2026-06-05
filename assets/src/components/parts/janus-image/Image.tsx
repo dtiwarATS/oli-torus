@@ -6,6 +6,8 @@ import {
 } from '../../../apps/delivery/components/NotificationContext';
 import { hasAiTriggerPrompt, invokeAdaptiveAiTrigger } from '../aiTrigger';
 import { PartComponentProps } from '../types/parts';
+import GifImage from './GifImage';
+import { isAnimatedGifSource } from './gifUtils';
 import { ImageModel } from './schema';
 
 const Image: React.FC<PartComponentProps<ImageModel>> = (props) => {
@@ -172,32 +174,56 @@ const Image: React.FC<PartComponentProps<ImageModel>> = (props) => {
       },
     });
 
-  return ready ? (
+  if (!ready) {
+    return null;
+  }
+
+  const handleClick = aiTriggerAvailable ? () => void fireAiTrigger() : undefined;
+  const handleKeyDown = aiTriggerAvailable
+    ? (event: React.KeyboardEvent<HTMLElement>) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          void fireAiTrigger();
+        }
+      }
+    : undefined;
+  const combinedStyles: CSSProperties = {
+    ...imageStyles,
+    ...(aiTriggerAvailable ? { cursor: 'pointer' } : {}),
+  };
+
+  // GIFs get an accessible play/pause toggle (WCAG 2.1 SC 2.2.2). Static
+  // images keep rendering as a plain <img> with no UI or layout changes.
+  if (isAnimatedGifSource(imgSrc)) {
+    return (
+      <GifImage
+        tagName={tagName}
+        alt={alt}
+        src={imgSrc}
+        className={imageClasses || undefined}
+        style={combinedStyles}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        role={aiTriggerAvailable ? 'button' : undefined}
+        tabIndex={aiTriggerAvailable ? 0 : undefined}
+      />
+    );
+  }
+
+  return (
     <img
       data-janus-type={tagName}
       draggable="false"
       alt={alt}
       src={imgSrc}
       className={imageClasses || undefined}
-      onClick={aiTriggerAvailable ? () => void fireAiTrigger() : undefined}
-      onKeyDown={
-        aiTriggerAvailable
-          ? (event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                void fireAiTrigger();
-              }
-            }
-          : undefined
-      }
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       role={aiTriggerAvailable ? 'button' : undefined}
       tabIndex={aiTriggerAvailable ? 0 : undefined}
-      style={{
-        ...imageStyles,
-        ...(aiTriggerAvailable ? { cursor: 'pointer' } : {}),
-      }}
+      style={combinedStyles}
     />
-  ) : null;
+  );
 };
 
 export const tagName = 'janus-image';
