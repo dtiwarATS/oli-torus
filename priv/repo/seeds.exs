@@ -142,6 +142,7 @@ Oli.Registrar.register_local_part_components(
     "janus-formula",
     "janus_ai_trigger",
     "janus_list_sort"
+    "janus_item_bank"
   ])
 )
 
