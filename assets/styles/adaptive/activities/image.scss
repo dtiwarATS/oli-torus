@@ -1,3 +1,110 @@
-janus-image {
-  //background-color: var(--black5_a);
+// Animated GIF play/pause controls (WCAG 2.1 SC 2.2.2 Pause, Stop, Hide).
+// Only rendered for GIF sources; static images are unaffected.
+//
+// The wrapper takes on the same layout box the bare <img> would have used
+// (including the responsive-image-* sizing classes), so the GIF matches a
+// normal image instead of collapsing to its natural size. The inner canvas/img
+// fills that box.
+.gif-image-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+
+  > canvas,
+  > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  // Responsive layout sizing, mirroring the img.responsive-image-* rules in
+  // responsive-layout.scss but applied to the wrapper box.
+  &.responsive-image-scale-only {
+    display: block;
+    width: 100%;
+    height: var(--image-height);
+  }
+
+  &.responsive-image-lock-ratio-only {
+    display: block;
+    width: var(--image-width);
+    max-width: 100%;
+    height: auto;
+  }
+
+  &.responsive-image-scale-lock-both {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  // When the wrapper height is auto, let the canvas/img define height from its
+  // intrinsic aspect ratio rather than stretching.
+  &.responsive-image-lock-ratio-only > canvas,
+  &.responsive-image-lock-ratio-only > img,
+  &.responsive-image-scale-lock-both > canvas,
+  &.responsive-image-scale-lock-both > img {
+    height: auto;
+  }
+
+  // Fallback mode: freeze canvas overlays the still-animating <img> when paused.
+  .gif-image-freeze {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    pointer-events: none;
+  }
+
+  &.is-paused .gif-image-freeze {
+    display: block;
+  }
+
+  &.is-paused > .gif-image-animated {
+    visibility: hidden;
+  }
+
+  .gif-image-toggle {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 0;
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    // High-contrast control against arbitrary image content (WCAG 1.4.11).
+    background-color: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    cursor: pointer;
+    line-height: 0;
+    transition: background-color 0.15s ease-in-out;
+
+    &:hover {
+      background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    &:focus-visible {
+      outline: 3px solid #ffffff;
+      outline-offset: 2px;
+    }
+
+    &:disabled {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .gif-image-toggle-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
 }
