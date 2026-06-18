@@ -76,7 +76,7 @@ export interface AppState {
   readonly: boolean;
   showDiagnosticsWindow: boolean;
   showScoringOverview: boolean;
-  sequenceEditorHeight: string;
+  sequenceEditorHeight: number;
   topLeftPanel: boolean;
   bottomLeftPanel: boolean;
   sequenceEditorExpanded: boolean;
@@ -106,7 +106,7 @@ const initialState: AppState = {
   readonly: true,
   showDiagnosticsWindow: false,
   showScoringOverview: false,
-  sequenceEditorHeight: '100vh',
+  sequenceEditorHeight: 200,
   topLeftPanel: true,
   bottomLeftPanel: true,
   sequenceEditorExpanded: false,
@@ -177,7 +177,7 @@ const slice: Slice<AppState> = createSlice({
     setLeftPanelState(
       state,
       action: PayloadAction<{
-        sequenceEditorHeight?: string;
+        sequenceEditorHeight?: number;
         top?: boolean;
         bottom?: boolean;
         sequenceEditorExpanded?: boolean;

@@ -11,7 +11,6 @@ import guid from 'utils/guid';
 import { useToggle } from '../../../../components/hooks/useToggle';
 import { createNew as createNewActivity } from '../../../authoring/store/activities/actions/createNew';
 import {
-  selectBottomLeftPanel,
   selectReadOnly,
   setCurrentRule,
   setLeftPanelState,
@@ -56,7 +55,6 @@ const SequenceEditor: React.FC<any> = (props: any) => {
   const [itemToRename, setItemToRename] = useState<any>(undefined);
   const [showConfirmDelete, setShowConfirmDelete] = useState<boolean>(false);
   const [itemToDelete, setItemToDelete] = useState<any>(undefined);
-  const bottomLeftPanel = useSelector(selectBottomLeftPanel);
   const isReadOnly = useSelector(selectReadOnly);
   const layerLabel = 'Layer';
   const bankLabel = 'Question Bank';
@@ -111,7 +109,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
         },
       }),
     );
-    sequenceItemToggleClick();
+    updateSequenceEditorLayout();
   };
 
   const addNewSequence = async (newSequenceEntry: any, siblingId: any) => {
@@ -428,20 +426,36 @@ const SequenceEditor: React.FC<any> = (props: any) => {
 
   const inputToFocus = useRef<HTMLInputElement>(null);
 
-  const sequenceItemToggleClick = () => {
-    setTimeout(() => {
-      const scrollHeight = ref.current?.scrollHeight || 0;
-      const sequenceClientHeight = refSequence?.current?.clientHeight || 0;
-      dispatch(
-        setLeftPanelState({
-          sequenceEditorHeight: ref?.current?.clientHeight
-            ? ref?.current?.clientHeight + 150
-            : ref?.current?.clientHeight,
-          sequenceEditorExpanded: scrollHeight < sequenceClientHeight ? true : false,
-        }),
-      );
-    }, 1000);
-  };
+  const updateSequenceEditorLayout = useCallback(() => {
+    const scrollHeight = ref.current?.scrollHeight || 0;
+    const sequenceClientHeight = refSequence?.current?.clientHeight || 0;
+    dispatch(
+      setLeftPanelState({
+        sequenceEditorHeight: ref?.current?.clientHeight
+          ? ref.current.clientHeight + 150
+          : 200,
+        sequenceEditorExpanded: scrollHeight < sequenceClientHeight,
+      }),
+    );
+  }, [dispatch]);
+
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    updateSequenceEditorLayout();
+
+    const observer = new ResizeObserver(() => {
+      updateSequenceEditorLayout();
+    });
+    observer.observe(element);
+    if (refSequence.current) {
+      observer.observe(refSequence.current);
+    }
+
+    return () => observer.disconnect();
+  }, [updateSequenceEditorLayout, open, hierarchy]);
+
   useEffect(() => {
     if (!itemToRename) return;
     inputToFocus.current?.focus();
@@ -694,11 +708,6 @@ const SequenceEditor: React.FC<any> = (props: any) => {
       ref={ref}
       defaultActiveKey="0"
       activeKey={open ? '0' : '-1'}
-      style={{
-        height: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : 'auto',
-        maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '60vh',
-        overflow: 'hidden',
-      }}
     >
       <div className="aa-panel-section-title-bar">
         <div className="d-flex align-items-center">
@@ -745,13 +754,7 @@ const SequenceEditor: React.FC<any> = (props: any) => {
           </Dropdown>
         </OverlayTrigger>
       </div>
-      <Accordion.Collapse
-        eventKey="0"
-        style={{
-          overflowY: 'auto',
-          maxHeight: !bottomLeftPanel && open ? 'calc(100vh - 100px)' : '55vh',
-        }}
-      >
+      <Accordion.Collapse eventKey="0">
         <div className="border border-gray-300 rounded">
           <ListGroup ref={refSequence} as="ol" className="aa-sequence">
             <SortableTree

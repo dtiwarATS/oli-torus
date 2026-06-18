@@ -30,8 +30,6 @@ import {
 import { saveActivity } from '../../store/activities/actions/saveActivity';
 import {
   selectCurrentRule,
-  selectSequenceEditorExpanded,
-  selectSequenceEditorHeight,
   setCurrentRule,
   setLeftPanelState,
 } from '../../store/app/slice';
@@ -41,8 +39,6 @@ const IRulesList: React.FC<any> = (props: any) => {
   const dispatch = useDispatch();
   const currentActivity = useSelector(selectCurrentActivity);
   const currentRule = useSelector(selectCurrentRule);
-  const sequenceEditorHeight = useSelector(selectSequenceEditorHeight);
-  const sequenceEditorExpanded = useSelector(selectSequenceEditorExpanded);
   const [open, toggleOpen] = useToggle(true);
   const rules = currentActivity?.authoring?.rules || [];
   const [ruleToEdit, setRuleToEdit] = useState<any>(undefined);
@@ -358,9 +354,6 @@ const IRulesList: React.FC<any> = (props: any) => {
       className="aa-adaptivity-rules"
       defaultActiveKey="0"
       activeKey={open ? '0' : '-1'}
-      style={{
-        maxHeight: sequenceEditorExpanded ? '25vh' : `calc(100vh - ${sequenceEditorHeight}px)`,
-      }}
     >
       <div className="aa-panel-section-title-bar">
         <div className="d-flex align-items-center">
@@ -420,13 +413,7 @@ const IRulesList: React.FC<any> = (props: any) => {
           </OverlayTrigger>
         )}
       </div>
-      <Accordion.Collapse
-        eventKey="0"
-        style={{
-          maxHeight: sequenceEditorExpanded ? '25vh' : `calc(100vh - ${sequenceEditorHeight}px)`,
-          overflowY: 'auto',
-        }}
-      >
+      <Accordion.Collapse eventKey="0">
         <ListGroup className="aa-rules-list" as="ol">
           {currentRule && !isLayer && !isBank && (
             <ListGroup.Item
