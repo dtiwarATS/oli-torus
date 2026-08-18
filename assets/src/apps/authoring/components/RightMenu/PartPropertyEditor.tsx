@@ -195,6 +195,7 @@ const simplifiedLabels: Record<string, string> = {
   'janus-hub-spoke': 'Hub and Spoke',
   'janus-item-bank': 'Item Bank',
   'janus-matching': 'Matching',
+  'janus-accordion': 'Accordion',
 };
 
 const simplifiedDescriptionLabels: Record<string, string> = {

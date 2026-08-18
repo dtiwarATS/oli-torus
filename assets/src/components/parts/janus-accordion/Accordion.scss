@@ -1,0 +1,140 @@
+.janus-accordion {
+  --accordion-theme: #0070f3;
+  --accordion-theme-soft: color-mix(in srgb, var(--accordion-theme) 12%, #ffffff);
+  --accordion-border: color-mix(in srgb, var(--accordion-theme) 30%, #ffffff);
+  --accordion-min-height: 240px;
+
+  position: relative;
+  box-sizing: border-box;
+  font-family: inherit;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid var(--accordion-border);
+  border-radius: 12px;
+  overflow: auto;
+  width: 100%;
+  height: 100%;
+  min-height: var(--accordion-min-height);
+
+  &.janus-accordion--responsive {
+    width: 100%;
+    min-height: var(--accordion-min-height);
+    height: auto;
+  }
+
+  &.janus-accordion--fixed {
+    min-height: var(--accordion-min-height);
+  }
+
+  .accordion-list {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .accordion-item {
+    border-bottom: 1px solid var(--accordion-border);
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  .accordion-heading {
+    margin: 0;
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .accordion-header-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 16px;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-sizing: border-box;
+
+    &:hover:not(:disabled) {
+      background: var(--accordion-theme-soft);
+    }
+
+    &:focus-visible {
+      outline: 3px solid var(--accordion-theme);
+      outline-offset: -3px;
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+
+    &[aria-expanded='true'] {
+      background: var(--accordion-theme-soft);
+      color: var(--accordion-theme);
+      font-weight: 600;
+
+      .accordion-chevron {
+        transform: rotate(180deg);
+      }
+    }
+  }
+
+  .accordion-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 1rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .accordion-chevron {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    transform: rotate(0deg);
+    transition: transform 0.2s ease;
+  }
+
+  .accordion-panel {
+    padding: 0 16px 16px;
+    box-sizing: border-box;
+
+    &[hidden] {
+      display: none;
+    }
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    p {
+      margin: 0 0 0.75em;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .accordion-empty-hint {
+    padding: 16px;
+    color: #64748b;
+    font-size: 0.875rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .janus-accordion .accordion-chevron {
+    transition: none;
+  }
+}
