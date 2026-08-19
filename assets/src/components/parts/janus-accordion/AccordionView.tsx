@@ -20,15 +20,15 @@ export type AccordionViewProps = {
   className?: string;
 };
 
-const AccordionChevron = () => (
+const AccordionChevron = ({ expanded }: { expanded: boolean }) => (
   <svg
-    className="accordion-chevron"
+    className={`accordion-chevron${expanded ? ' is-expanded' : ''}`}
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 256 256"
     aria-hidden="true"
     focusable="false"
   >
-    <polygon points="0,64 128,192 256,64" />
+    <polygon points="64,48 176,128 64,208" />
   </svg>
 );
 
@@ -106,7 +106,7 @@ const AccordionView = forwardRef<HTMLDivElement, AccordionViewProps>(function Ac
             const nodes = (section.nodes || []) as MarkupTree[];
 
             return (
-              <div className="accordion-item" key={section.id}>
+              <div className={`accordion-item${expanded ? ' is-expanded' : ''}`} key={section.id}>
                 <h3 className="accordion-heading">
                   <button
                     type="button"
@@ -121,7 +121,7 @@ const AccordionView = forwardRef<HTMLDivElement, AccordionViewProps>(function Ac
                     <span className="accordion-title">
                       {section.title || `Section ${oneBased}`}
                     </span>
-                    <AccordionChevron />
+                    <AccordionChevron expanded={expanded} />
                   </button>
                 </h3>
                 <div
@@ -129,7 +129,7 @@ const AccordionView = forwardRef<HTMLDivElement, AccordionViewProps>(function Ac
                   role="region"
                   aria-labelledby={headerId}
                   hidden={!expanded}
-                  className="accordion-panel"
+                  className={`accordion-panel${expanded ? ' is-expanded' : ''}`}
                 >
                   {nodes.map((subtree, nodeIndex) =>
                     renderFlow(`${section.id}-${nodeIndex}`, subtree, {}, []),
